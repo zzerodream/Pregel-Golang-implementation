@@ -2,24 +2,15 @@ package main
 
 import "main/vertex"
 import "main/message"
-import "main/edge"
 import "fmt"
 import "time"
 
 func main() {
 	workerChan := make(chan *message.Message)
 
-	edge1 := edge.NewEdge(1, 2, 1)
-	edge2 := edge.NewEdge(2, 3, 3)
-	edge3 := edge.NewEdge(1, 3, 1)
-	
-	edge4 := edge.NewEdge(2, 1, 1)
-	edge5 := edge.NewEdge(3, 2, 3)
-	edge6 := edge.NewEdge(3, 1, 1)
-
-	vertex1_neighbours := []*edge.Edge{edge1, edge3}
-	vertex2_neighbours := []*edge.Edge{edge2, edge4}
-	vertex3_neighbours := []*edge.Edge{edge5, edge6}
+	vertex1_neighbours := map[int]int{2: 1, 3: 1}
+	vertex2_neighbours := map[int]int{1: 1, 3: 3}
+	vertex3_neighbours := map[int]int{2: 3, 1: 1}
 
 	vertex1 := vertex.NewVertex(1, vertex1_neighbours, workerChan)
 	vertex2 := vertex.NewVertex(2, vertex2_neighbours, workerChan)

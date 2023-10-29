@@ -1,6 +1,5 @@
 package vertex
 
-import "main/edge"
 import "main/message"
 import "fmt"
 
@@ -15,12 +14,12 @@ type Vertex struct {
 	id int
 	distance map[int]int
 	state State
-	edges []*edge.Edge
+	edges map[int]int
 	MessageChan chan *message.Message
 	workerChan chan *message.Message 
 }
 
-func NewVertex(id int, edges []*edge.Edge, workerChan chan *message.Message) *Vertex {
+func NewVertex(id int, edges map[int]int, workerChan chan *message.Message) *Vertex {
 	vertex := &Vertex {
 		id: id,
 		distance: make(map[int]int),
@@ -30,8 +29,8 @@ func NewVertex(id int, edges []*edge.Edge, workerChan chan *message.Message) *Ve
 		workerChan: workerChan,
 	}
 	vertex.distance[vertex.id] = 0
-	for _, neighbourEdge := range edges {
-		vertex.distance[neighbourEdge.Target] = neighbourEdge.Weight
+	for to, weight := range edges {
+		vertex.distance[to] = weight
 	}
 	// go vertex.SendMessagesToServer() 
 	return vertex
@@ -42,45 +41,13 @@ func (v *Vertex) UpdateState(newState State) {
 }
 
 func (v *Vertex) SendMessagesToServer() {
-	for _, neighbourEdge := range v.edges {
-		target := neighbourEdge.Target
-		newMsg := message.NewMessage(v.id, target, v.distance, 5)
+	for neighbour, _ := range v.edges {
+		newMsg := message.NewMessage(v.id, neighbour, v.distance, 5)
 		go func(msg *message.Message) {
 			v.workerChan <- msg
 		}(newMsg)
 	}
 }
-
-// func (v *Vertex) compute() {
-// 	fmt.Printf("Vertex %d: Calculating\n", v.id)
-// 	anyChange := false
-// 	for message := range v.MessageChan {
-// 		fmt.Printf("Vertex %d: Dealing with %v\n", v.id, message.Payload)
-// 		from := message.SenderId
-// 		payload := message.Payload
-// 		for target, dist := range payload {
-// 			myDistance, exists := v.distance[target]
-// 			if exists {
-// 				if (v.distance[from] + dist) < myDistance {
-// 					v.distance[target] = v.distance[from] + dist
-// 					anyChange = true
-// 				}
-// 			} else {
-// 				v.distance[target] = dist
-// 				anyChange = true
-// 			}
-// 		}
-// 		fmt.Printf("Vertex %d: Finished Dealing with %v, Distance: %v\n", v.id, message.Payload, v.distance)
-// 	}
-// 	fmt.Printf("Vertex %d: Clear Messages Queue. Distance: %v.\n", v.id, v.distance)
-// 	if !anyChange {
-// 		v.state = IDLE
-// 		fmt.Printf("Vertex %d: State: %s\n", v.id, v.state)
-// 	} else {
-// 		fmt.Printf("Vertex %d: Sending messages back.\n", v.id, v.distance)
-// 		go v.SendMessagesToServer() 
-// 	}
-// }
 
 func (v *Vertex) Compute() {
 	fmt.Printf("Vertex %d: Calculating\n", v.id)
