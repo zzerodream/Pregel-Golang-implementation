@@ -1,17 +1,19 @@
 package message
 
 type Message struct {
-	SenderId int
-	TargetId int
-	Payload map[int]int
+	From int
+	To int
+	Value interface{}
+	Type int
 }
 
 
-func NewMessage(sender int, target int, payload map[int]int) *Message {
+func NewMessage(sender int, target int, payload interface{}, t int) *Message {
 	message := &Message {
-		SenderId: sender,
-		TargetId: target,
-		Payload: payload,
+		From: sender,
+		To: target,
+		Value: payload,
+		Type: t,
 	}
 	return message
 }

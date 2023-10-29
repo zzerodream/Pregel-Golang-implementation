@@ -1,7 +1,7 @@
 package vertex
 
-import "edge"
-import "message"
+import "main/edge"
+import "main/message"
 import "fmt"
 
 type State int
@@ -16,7 +16,6 @@ type Vertex struct {
 	distance map[int]int
 	state State
 	edges []*edge.Edge
-	CommandChan chan string
 	MessageChan chan *message.Message
 	workerChan chan *message.Message 
 }
@@ -25,9 +24,8 @@ func NewVertex(id int, edges []*edge.Edge, workerChan chan *message.Message) *Ve
 	vertex := &Vertex {
 		id: id,
 		distance: make(map[int]int),
-		state: IDLE,
+		state: ACTIVE,
 		edges: edges,
-		CommandChan: make(chan string),
 		MessageChan: make(chan *message.Message),
 		workerChan: workerChan,
 	}
@@ -35,25 +33,9 @@ func NewVertex(id int, edges []*edge.Edge, workerChan chan *message.Message) *Ve
 	for _, neighbourEdge := range edges {
 		vertex.distance[neighbourEdge.Target] = neighbourEdge.Weight
 	}
-	// go v.listenForCommandChan()
 	// go vertex.SendMessagesToServer() 
 	return vertex
 }
-
-func (v *Vertex) ListenForCommandChan() {
-	for {
-		select {
-		case command := <-v.CommandChan:
-			fmt.Printf("Vertex %d: Received command: %s\n", v.id, command)
-			if command == "Start" {
-				fmt.Printf("Vertex %d: Prepare Calculation\n", v.id)
-				v.state = ACTIVE
-				go v.compute()
-			}
-		}
-	}
-}
-
 
 func (v *Vertex) UpdateState(newState State) {
 	v.state = newState
@@ -62,7 +44,7 @@ func (v *Vertex) UpdateState(newState State) {
 func (v *Vertex) SendMessagesToServer() {
 	for _, neighbourEdge := range v.edges {
 		target := neighbourEdge.Target
-		newMsg := message.NewMessage(v.id, target, v.distance)
+		newMsg := message.NewMessage(v.id, target, v.distance, 5)
 		go func(msg *message.Message) {
 			v.workerChan <- msg
 		}(newMsg)
@@ -100,7 +82,7 @@ func (v *Vertex) SendMessagesToServer() {
 // 	}
 // }
 
-func (v *Vertex) compute() {
+func (v *Vertex) Compute() {
 	fmt.Printf("Vertex %d: Calculating\n", v.id)
 	anyChange := false
 
@@ -112,9 +94,9 @@ ReadLoop:
 				// The channel is closed, exit the loop
 				break ReadLoop
 			}
-			fmt.Printf("Vertex %d: Dealing with %v\n", v.id, message.Payload)
-			from := message.SenderId
-			payload := message.Payload
+			fmt.Printf("Vertex %d: Dealing with %v\n", v.id, message.Value)
+			from := message.From
+			payload := message.Value.(map[int]int)
 			for target, dist := range payload {
 				myDistance, exists := v.distance[target]
 				if exists {
@@ -127,7 +109,7 @@ ReadLoop:
 					anyChange = true
 				}
 			}
-			fmt.Printf("Vertex %d: Finished Dealing with %v, Distance: %v\n", v.id, message.Payload, v.distance)
+			fmt.Printf("Vertex %d: Finished Dealing with %v, Distance: %v\n", v.id, message.Value, v.distance)
 		default:
 			break ReadLoop
 		}

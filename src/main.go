@@ -1,8 +1,8 @@
 package main
 
-import "vertex"
-import "message"
-import "edge"
+import "main/vertex"
+import "main/message"
+import "main/edge"
 import "fmt"
 import "time"
 
@@ -24,9 +24,6 @@ func main() {
 	vertex1 := vertex.NewVertex(1, vertex1_neighbours, workerChan)
 	vertex2 := vertex.NewVertex(2, vertex2_neighbours, workerChan)
 	vertex3 := vertex.NewVertex(3, vertex3_neighbours, workerChan)
-	go vertex1.ListenForCommandChan()
-	go vertex2.ListenForCommandChan()
-	go vertex3.ListenForCommandChan()
 
 	all_vertex := []*vertex.Vertex{vertex1, vertex2, vertex3}
 	
@@ -35,11 +32,10 @@ func main() {
 	go vertex2.SendMessagesToServer()
 	go vertex3.SendMessagesToServer()
 
-	command := "Start"
     <- time.After(2 * time.Second)
 	for _, v := range all_vertex {
 		go func(ve *vertex.Vertex) {
-			ve.CommandChan <- command
+			ve.Compute()
 		}(v)
 	}
 
@@ -57,7 +53,7 @@ func main() {
 func listenForWorkerChan(workerChan chan *message.Message, all_vertex []*vertex.Vertex) {
 	for {
 		msg := <- workerChan
-		fmt.Printf("From %d, To %d, Content: %v\n", msg.SenderId, msg.TargetId, msg.Payload)
-		go func() {all_vertex[msg.TargetId-1].MessageChan <- msg} ()
+		fmt.Printf("From %d, To %d, Content: %v\n", msg.From, msg.To, msg.Value)
+		go func() {all_vertex[msg.To-1].MessageChan <- msg} ()
 	}
 }
