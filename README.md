@@ -11,6 +11,6 @@ Things I have modified for Vertex.go:
 	5. Rename SendMessageToServer as SendMessageToWorker
 
 Other modifications:
-    1. Rename MessageTypes.go as Message.go, includes the defination for message struct and update the MessageType.
+    1. Delete MessageTypes.go and add Message.go, includes the defination for message struct and update the MessageType.
     2. update Worker.go
     3. Functions to establish connections are all under Worker.go, maybe can delete WorkerConnection.go
