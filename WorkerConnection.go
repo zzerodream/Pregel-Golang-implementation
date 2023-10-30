@@ -16,10 +16,10 @@ type WorkerConnection struct {
 	master *Master
 }
 
-// 2 goroutines for 1 worker connection
+// 2 goroutines per worker connection
 func (c *WorkerConnection) Run() {
 	//receive message from worker
-	go c.ListenWorkers()
+	go c.RecvWorkers()
 	for {
 		for serverMessage := range c.C {
 			c.SendToWorker(serverMessage)
@@ -27,7 +27,7 @@ func (c *WorkerConnection) Run() {
 	}
 }
 
-func (c *WorkerConnection) ListenWorkers() {
+func (c *WorkerConnection) RecvWorkers() {
 	buf := make([]byte, 8192)
 	for {
 		n, err := c.conn.Read(buf)
@@ -46,7 +46,6 @@ func (c *WorkerConnection) SendToWorker(content any) {
 	if parsedContent, ok := content.(string); ok {
 		c.conn.Write([]byte(parsedContent))
 	} else if parsedContent, ok := content.(Node); ok {
-
 		// TODO: how to set the fields
 		msg := Message{
 			From:  0,
@@ -63,9 +62,9 @@ func (c *WorkerConnection) SendToWorker(content any) {
 }
 
 func (c *WorkerConnection) ProcessWorkerMessage(msg []byte) {
+
+	// 统一发给main thread处理
 	message := new(Message)
 	json.Unmarshal(msg, message)
-	switch message.Type {
-
-	}
+	c.master.inCh <- *message
 }

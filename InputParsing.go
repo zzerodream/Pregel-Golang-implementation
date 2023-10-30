@@ -10,7 +10,7 @@ import (
 // Define the structure that matches the JSON format
 type Node struct {
 	ID    int            `json:"ID"`
-	edges map[string]int `json:"edges"`
+	Edges map[string]int `json:"edges"`
 }
 
 // ReadJSONFile reads a JSON file and returns its content as a byte slice
@@ -64,16 +64,4 @@ func Partition(nodes map[string]Node, k int) []map[string]Node {
 		parts[partNo][id] = node
 	}
 	return parts
-}
-
-func main() {
-	nodes := ParseInput("SampleInput.json")
-	parts := Partition(nodes, 3)
-	fmt.Println(parts)
-	jsonStr, err := json.Marshal(parts)
-	if err != nil {
-		fmt.Printf("Error: %s", err.Error())
-	} else {
-		fmt.Println(string(jsonStr))
-	}
 }
