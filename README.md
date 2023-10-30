@@ -15,3 +15,9 @@ Other modifications:
     1. Rename MessageTypes.go as Message.go, includes the defination for message struct and update the MessageType.  
     2. update Worker.go  
     3. Functions to establish connections are all under Worker.go, maybe can delete WorkerConnection.go  
+
+
+Things to do:  
+- How does the master know when to start the first superstep after workers receive the partition (extra message type or just a short timeout after sending the partitions)
+
+- 

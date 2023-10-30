@@ -38,6 +38,7 @@ import (
     "bufio"
     "encoding/json"
     "strconv"
+	"time"
 )
 
 // Worker represents a worker in the system.
@@ -52,39 +53,40 @@ type Worker struct {
 	MasterConnection net.Conn  //conn object with the msater
 	mutex        sync.Mutex 
 	numberOfWorkers int
+	//master IP?
 }
 
 
 //Establish connection with the master
-func (w *Worker) EstablishMasterConnection(MasterIP string, port int)(*net.TCPConn, error){
+func (w *Worker) EstablishMasterConnection(MasterIP string, port int)error{
 	maxRetries := 3 // Number of retries
     retryDelay := 5*time.Second // Delay between retries
 	addr := fmt.Sprintf("%s:%d", MasterIP, port)
 	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve address: %v", err)
+		return fmt.Errorf("failed to resolve address: %v", err)
 	}
 	for retry := 0; retry < maxRetries; retry++ {
 		conn, err := net.DialTCP("tcp", nil, tcpAddr)
 		if err == nil {
-			return conn, nil
+			w.MasterConnection = conn
+			return nil
 		}
 
 		fmt.Printf("Failed to establish connection to %s, retrying...\n", addr)
 		time.Sleep(retryDelay)
 	}
-	return nil, fmt.Errorf("exhausted all retries, could not establish connection")
+	return fmt.Errorf("exhausted all retries, could not establish connection")
 }
 //establish connections with other workers
 //Worker needs to listen on IP:9999
 const basePort = 9999
 func (w *Worker) StartListener() {
 	listenAddr := fmt.Sprintf(":%d", basePort)
-	listener, err := net.Listen("tcp", listenAddr)
+	listener, _ := net.Listen("tcp", listenAddr)
 	defer listener.Close()
 
 	fmt.Printf("Worker %d listening on port %d\n", w.ID, basePort)
-
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -95,8 +97,10 @@ func (w *Worker) StartListener() {
 		remoteAddress := conn.RemoteAddr().String()
 		ipAndPort := strings.Split(remoteAddress, ":")
 		ip := ipAndPort[0]
-		workerID = w.reverse_IPs[ip]
-		Connections[workerID] = conn
+		workerID := w.reverse_IPs[ip]
+		w.mutex.Lock()
+		w.Connections[workerID] = conn
+		w.mutex.Unlock()
 		
 		//go handleClient(conn)
 	}
@@ -108,7 +112,7 @@ let's say worker 1,2,3.
 	c. 3 will start listening on port 9999 and try to establish connection with worker 1, 2
 
 */
-func (w *Worker)ConnectToClientsWithLowerID() (*net.TCPConn, error){
+func (w *Worker)ConnectToClientsWithLowerID() error{
 	maxRetries := 3 // Number of retries
     retryDelay := 5*time.Second // Delay between retries
 
@@ -117,12 +121,15 @@ func (w *Worker)ConnectToClientsWithLowerID() (*net.TCPConn, error){
         addr := fmt.Sprintf("%s:%d", targetIP, basePort)
 		tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
 		if err != nil {
-			return nil, fmt.Errorf("failed to resolve address: %v", err)
+			return fmt.Errorf("failed to resolve address: %v", err)
 		}
         for retry := 0; retry < maxRetries; retry++ {
             conn, err := net.DialTCP("tcp", nil, tcpAddr)
             if err == nil {
-                return conn, nil
+				w.mutex.Lock()
+				w.Connections[id] = conn
+				w.mutex.Unlock()
+                return nil
             }
 
             fmt.Printf("Failed to establish connection to %s, retrying...\n", addr)
@@ -130,7 +137,7 @@ func (w *Worker)ConnectToClientsWithLowerID() (*net.TCPConn, error){
         }
     }
 
-    return nil, fmt.Errorf("exhausted all retries, could not establish connection")
+    return fmt.Errorf("exhausted all retries, could not establish connection")
 
 }
 
@@ -159,15 +166,15 @@ func (w *Worker) ReceiveGraphPartition() {
 		}
 		//receive graph partition, we will initialize vertex instance.
 		if message.Type == 6{
-			ID, edges, err := extractIDAndEdges(message)
+			VertexID, edges, err := extractIDAndEdges(message)
 			if err != nil {
 				fmt.Printf("Error extracting data: %v\n", err)
 				continue
 			}
 			//now we have the ID. edges and WorkerChannel, initialize the vertex struc
-			v := NewVertex(ID, edges, w.workerChan)
+			v := NewVertex(VertexID, edges, w.workerChan)
 			//hold the vertices info under worker.Vertices
-			w.Vertices[ID] = v
+			w.Vertices[VertexID] = v
 		}
 	}
 }
