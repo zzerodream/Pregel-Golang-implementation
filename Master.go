@@ -7,28 +7,32 @@ import (
 )
 
 type Master struct {
+	highestID  int // the highest id of all workers
 	mapLock    sync.Mutex
-	workersMap map[string]*WorkerConnection // map ip addr to worker connection
+	workersMap map[int]*WorkerConnection // map id to worker connection
 	inCh       chan string
 }
 
 func (m *Master) RegisterWorker(conn net.Conn) *WorkerConnection {
 	m.mapLock.Lock()
+	m.highestID++
 	wc := &WorkerConnection{
+		ID:     m.highestID,
 		Addr:   conn.RemoteAddr().String(),
-		C:      make(chan string),
+		C:      make(chan any, 100),
 		conn:   conn,
 		master: m,
 	}
-	m.workersMap[wc.Addr] = wc
+	m.workersMap[wc.ID] = wc
 	m.mapLock.Unlock()
 	return wc
 }
 
 func NewMaster() *Master {
 	return &Master{
+		highestID:  0, // worker ID allocation start from 0
 		mapLock:    sync.Mutex{},
-		workersMap: make(map[string]*WorkerConnection),
+		workersMap: make(map[int]*WorkerConnection),
 		inCh:       make(chan string),
 	}
 }
@@ -72,13 +76,15 @@ func (m *Master) HandleConnection(conn net.Conn) {
 }
 
 func (m *Master) GraphDistribution() {
-	graph := ParseInput("./")
-	fmt.Println(graph)
-	partitions := Partition([]Vertex{}, len(m.workersMap))
-	index := 0
-	for _, connection := range m.workersMap {
-		connection.C <- fmt.Sprint(partitions[index])
-		index++
+	nodes := ParseInput("SampleInput.json")
+	parts := Partition(nodes, 3)
+	fmt.Println(parts)
+	m.mapLock.Lock()
+	receiverID := 0
+	for _, part := range parts {
+		for _, node := range part {
+			m.workersMap[receiverID].C <- node
+		}
 	}
-
+	m.mapLock.Unlock()
 }

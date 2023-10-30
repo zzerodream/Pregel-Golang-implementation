@@ -10,7 +10,7 @@ import (
 // Define the structure that matches the JSON format
 type Node struct {
 	ID    int            `json:"ID"`
-	Edges map[string]int `json:"edges"`
+	edges map[string]int `json:"edges"`
 }
 
 // ReadJSONFile reads a JSON file and returns its content as a byte slice
