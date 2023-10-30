@@ -10,12 +10,6 @@ Things I have modified for Vertex.go:
 	4. All the vertices share the same MessageChan with the worker.  
 	5. Rename SendMessageToServer as SendMessageToWorker  
 
-<<<<<<< HEAD
-Other modifications:
-    1. Delete MessageTypes.go and add Message.go, includes the defination for message struct and update the MessageType.
-    2. update Worker.go
-    3. Functions to establish connections are all under Worker.go, maybe can delete WorkerConnection.go
-=======
 
 Other modifications:  
     1. Rename MessageTypes.go as Message.go, includes the defination for message struct and update the MessageType.  
@@ -27,4 +21,3 @@ Things to do:
 - How does the master know when to start the first superstep after workers receive the partition (extra message type or just a short timeout after sending the partitions)
 
 - 
->>>>>>> origin/main
