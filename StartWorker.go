@@ -4,13 +4,6 @@ import (
 	"net"
 )
 
-/*Worker initialization and things to do after initialization
-
-	7. workers call ReceiveGraphPartition(), will close once receive all partitions
-	8. Then workers can use a go routine to call ReceiveFromMaster() for other instructions from master. 
-
-*/
-
 // call all necessary functions for the worker
 func (w *Worker) Run() {
 	var wg sync.WaitGroup
