@@ -14,7 +14,8 @@ Things I have modified for Vertex.go:
 Other modifications:  
     1. Rename MessageTypes.go as Message.go, includes the defination for message struct and update the MessageType.  
     2. update Worker.go  
-    3. Functions to establish connections are all under Worker.go, maybe can delete WorkerConnection.go  
+    3. Functions to establish connections are all under Worker.go, StartWorker.go is kind of like the main function to start a worker 
+	4. All ID starts from 1 instead of 0
 
 
 Things to do:  

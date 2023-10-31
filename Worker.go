@@ -53,6 +53,10 @@ func (w *Worker) EstablishMasterConnection(){
 //Worker needs to listen on IP:9999
 const basePort = 9999
 func (w *Worker) StartListener() {
+	//if this is the worker with highest ID, won't start listening
+	if w.ID == w.numberOfWorkers{
+		return
+	}
 	listenAddr := fmt.Sprintf(":%d", basePort)
 	listener, err := net.Listen("tcp", listenAddr)
 	if err != nil {
@@ -60,10 +64,11 @@ func (w *Worker) StartListener() {
 	    return
 	}
 	defer listener.Close()
-
+	count := 0
 	fmt.Printf("Worker %d listening on port %d\n", w.ID, basePort)
 	for {
 		conn, err := listener.Accept()
+		count += 1
 		if err != nil {
 			fmt.Printf("Worker %d Error accepting connection: %v\n", w.ID, err)
 			continue
@@ -76,7 +81,8 @@ func (w *Worker) StartListener() {
 		w.mutex.Lock()
 		w.Connections[workerID] = conn
 		w.mutex.Unlock()
-		if len(w.Connections) == w.numberOfWorkers-1{
+		if count == w.numberOfWorkers-w.ID{ //If all workers with higher ID has established connection with current worker, return.
+			
 			return
 		}
 	}
@@ -89,6 +95,10 @@ let's say worker 1,2,3.
 
 */
 func (w *Worker)ConnectToWorkerssWithLowerID(){
+	//if this is the worker with lowest ID 1, just return.c
+	if w.ID == 1{
+		return
+	}
 	maxRetries := 3 // Number of retries
     retryDelay := 2*time.Second // Delay between retries
 	time.Sleep(2*time.Second) //wait a few seconds before trying to establish connection, ensure that all workers have start listening
