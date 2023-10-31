@@ -99,9 +99,10 @@ func (m *Master) HandleConnection(conn net.Conn) {
 
 func (m *Master) GraphDistribution() {
 	nodes := ParseInput("SampleInput.json")
-	parts := Partition(nodes, 3)
+	parts := Partition(nodes, 1)
 	fmt.Println(parts)
 	m.mapLock.Lock()
+	//TODO: disttibute the graph. Now only work for one worker, we need to know all workers.
 	receiverID := 1
 	for _, part := range parts {
 		for _, node := range part {

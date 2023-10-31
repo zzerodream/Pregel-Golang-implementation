@@ -419,13 +419,12 @@ func (w *Worker) HandleAllOutgoingMessages() {
 			go func(m Message) {
 				//todo: send messages to corresponding worker
 				//**************************************************just for demo********************************************88
-				To := 1
-				if To == w.ID{
+				To := m.To
+				workerID := To%w.numberOfWorkers
+				if workerID == 0{
 					fmt.Println("Same machine, won't use tcp for exchanging messages.")
 					w.EnqueueMessage(m)
 				}else{
-					To := m.To
-					workerID := To%w.numberOfWorkers
 					w.SendMessageToWorker(workerID, m)
 				}
 				defer wg.Done()
