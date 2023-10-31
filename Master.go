@@ -7,19 +7,20 @@ import (
 )
 
 type Master struct {
-	highestID   int // the highest id of all workers
-	mapLock     sync.Mutex
-	workersMap  map[int]*WorkerConnection // map id to worker connection
-	inCh        chan Message
-	finishCount int
-	numberOfworker int
+	highestID      int // the highest id of all workers
+	mapLock        sync.Mutex
+	workersMap     map[int]*WorkerConnection // map id to worker connection
+	inCh           chan Message
+	finishCount    int
+	numberOfWorker int
+	connectedNum   int
 }
 
 func (m *Master) RegisterWorker(conn net.Conn) *WorkerConnection {
 	m.mapLock.Lock()
 	m.highestID++
 	wc := &WorkerConnection{
-		ID:     m.highestID,  // ID assignment?
+		ID:     m.highestID, // ID assignment?
 		Addr:   conn.RemoteAddr().String(),
 		C:      make(chan any, 100), //is it the channel of Message struct??
 		conn:   conn,
@@ -32,11 +33,13 @@ func (m *Master) RegisterWorker(conn net.Conn) *WorkerConnection {
 
 func NewMaster() *Master {
 	return &Master{
-		highestID:   0, // worker ID allocation start from 0
-		mapLock:     sync.Mutex{},
-		workersMap:  make(map[int]*WorkerConnection),
-		inCh:        make(chan Message, 500),
-		finishCount: 0,
+		highestID:      0, // worker ID allocation start from 0
+		mapLock:        sync.Mutex{},
+		workersMap:     make(map[int]*WorkerConnection),
+		inCh:           make(chan Message, 500),
+		finishCount:    0,
+		numberOfWorker: 1,
+		connectedNum:   0,
 	}
 }
 
@@ -65,10 +68,14 @@ func (m *Master) Start() {
 			fmt.Println(err)
 			continue
 		}
+		m.connectedNum++
 		go m.HandleConnection(conn)
+		if m.connectedNum == m.numberOfWorker {
+			break
+		}
 	}
-
-	// TODO: when to start partition
+	m.GraphDistribution()
+	m.InstructNextStep()
 }
 
 // HandleConnection handles each incoming connection and prints the client's address
@@ -93,7 +100,6 @@ func (m *Master) GraphDistribution() {
 		}
 	}
 	m.mapLock.Unlock()
-	m.InstructNextStep()
 }
 
 func (m *Master) InstructNextStep() {
@@ -126,13 +132,13 @@ func (m *Master) ProcessMessage(message Message) {
 	switch message.Type {
 	case COMPUTE_FINISH:
 		m.finishCount++
-		if m.finishCount == m.highestID {
+		if m.finishCount == m.numberOfWorker {
 			m.InstructExchange()
 			m.finishCount = 0
 		}
 	case SEND_FINISH:
 		m.finishCount++
-		if m.finishCount == m.highestID {
+		if m.finishCount == m.numberOfWorker {
 			m.InstructNextStep()
 			m.finishCount = 0
 		}

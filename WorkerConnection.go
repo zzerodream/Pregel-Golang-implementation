@@ -1,18 +1,18 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
-	//"io"
 	"net"
-	"bufio"
 )
+
 // Is this workerConnection type necessary?
 type WorkerConnection struct {
-	ID   int // incremental
-	Addr string
-	C    chan any
-	conn net.Conn
+	ID     int // incremental
+	Addr   string
+	C      chan any
+	conn   net.Conn
 	master *Master
 }
 
@@ -32,20 +32,20 @@ func (c *WorkerConnection) RecvWorkers() {
 	reader := bufio.NewReader(c.conn)
 	for {
 		//assume that every message from master is sepetated by '\n'
-	    line, err := reader.ReadString('\n')
-	    if err != nil {
-	        fmt.Printf("Error reading message: %v\n", err)
-	        break
-	    }
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			fmt.Printf("Error reading message: %v\n", err)
+			break
+		}
 		//decode the json and create the message object
-	    var message Message
-	    err = json.Unmarshal([]byte(line), &message)
-	    if err != nil {
-	        fmt.Printf("Error unmarshalling message: %v\n", err)
-	        continue
-	    }
+		var message Message
+		err = json.Unmarshal([]byte(line), &message)
+		if err != nil {
+			fmt.Printf("Error unmarshalling message: %v\n", err)
+			continue
+		}
 		c.master.inCh <- message
-	}		
+	}
 }
 
 func (c *WorkerConnection) SendToWorker(content any) {
