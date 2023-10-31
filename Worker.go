@@ -41,7 +41,7 @@ func (w *Worker) EstablishMasterConnection(){
 		conn, err := net.DialTCP("tcp", nil, tcpAddr)
 		if err == nil {
 			w.MasterConnection = conn
-			fmt.Printf("Successfully established connection with the master")
+			fmt.Printf("Successfully established connection with the master\n")
 		}
 
 		fmt.Printf("Failed to establish connection to %s, retrying...\n", addr)
@@ -116,9 +116,9 @@ func (w *Worker)ConnectToWorkerssWithLowerID(){
             fmt.Printf("Failed to establish connection to %d, retrying...\n", id)
             time.Sleep(retryDelay)
         }
-		fmt.Printf("exhausted all retries, could not establish connection to %d",id)
+		fmt.Printf("exhausted all retries, could not establish connection to %d\n",id)
     }
-	fmt.Printf("Successfully established connection with workers with lower ID")
+	fmt.Printf("Successfully established connection with workers with lower ID\n")
 }
 
 //receive graph partition from master and will terminate once receive terminate message
@@ -304,7 +304,7 @@ func (w *Worker) HandleAllIncomingMessages(terminate chan struct{}) {
 
 //handle function for each connection
 func (w *Worker) handleIncomingMessagesFromConn(id int, conn net.Conn, terminate chan struct{}) {
-	fmt.Printf("Worker %d is handling messages from worker %d", w.ID, id)
+	fmt.Printf("Worker %d is handling messages from worker %d\n", w.ID, id)
     reader := bufio.NewReader(conn)
     for {
 		select{
