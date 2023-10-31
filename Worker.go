@@ -42,6 +42,7 @@ func (w *Worker) EstablishMasterConnection(){
 		if err == nil {
 			w.MasterConnection = conn
 			fmt.Printf("Successfully established connection with the master\n")
+			return
 		}
 
 		fmt.Printf("Failed to establish connection to %s, retrying...\n", addr)
@@ -414,5 +415,50 @@ func (w *Worker) HandleAllOutgoingMessages() {
 			}
 		}
 	}
+}
+
+//
+func NewWorker() *Worker{
+	return &Worker{
+		ID:             1,
+		Vertices:       make(map[int]*Vertex),
+		MessageQueue:   []Message{},
+		workerChan:     make(chan *Message,100),
+		IPs:            make(map[int]string),
+		reverse_IPs:    make(map[string]int),
+		Connections:    make(map[int]net.Conn),
+		mutex:          sync.Mutex{},
+		numberOfWorkers:  5, // set number of workers,
+		MasterIP: "localhost", //set the IP of the msater
+		MasterPort: 8080, //set port number
+	}
+}
+// call all necessary functions for the worker
+func (w *Worker) Run(){
+	var wg sync.WaitGroup
+	//Establish connection with master
+	w.EstablishMasterConnection()  //not using go routine cause I want to make sure the connection is establish before proceeding to next step
+	//while workers are trying to e currently will keep running and not killedstablish connection between each other, we can start receving partitions from the master
+	wg.Add(1)
+	go func(){
+		w.ReceiveGraphPartition()
+		wg.Done()
+	}()
+	//Start listener and try to establish connection with other workers
+	wg.Add(1)
+	go func(){
+		w.StartListener()  // Begin listening for incoming connections in a new go routine, will stop once all connections are established
+		wg.Done()
+	}()
+	wg.Add(1)
+	go func(){
+		w.ConnectToWorkerssWithLowerID()
+		wg.Done()
+	}()
+	// only proceed after receving all partitions and establish all connections
+	wg.Wait()
+	//continue receiving instructions from master.
+	w.ReceiveFromMaster()
+
 }
 

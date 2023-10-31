@@ -3,16 +3,16 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io"
+	//"io"
 	"net"
+	"bufio"
 )
-
+// Is this workerConnection type necessary?
 type WorkerConnection struct {
 	ID   int // incremental
 	Addr string
 	C    chan any
 	conn net.Conn
-
 	master *Master
 }
 
@@ -20,6 +20,7 @@ type WorkerConnection struct {
 func (c *WorkerConnection) Run() {
 	//receive message from worker
 	go c.RecvWorkers()
+	// maybe we don't need this for for loop here
 	for {
 		for serverMessage := range c.C {
 			c.SendToWorker(serverMessage)
@@ -28,18 +29,23 @@ func (c *WorkerConnection) Run() {
 }
 
 func (c *WorkerConnection) RecvWorkers() {
-	buf := make([]byte, 8192)
+	reader := bufio.NewReader(c.conn)
 	for {
-		n, err := c.conn.Read(buf)
-
-		if err != nil && err != io.EOF {
-			fmt.Println("read error: ", err)
-			return
-		}
-
-		c.ProcessWorkerMessage(buf[:n])
-
-	}
+		//assume that every message from master is sepetated by '\n'
+	    line, err := reader.ReadString('\n')
+	    if err != nil {
+	        fmt.Printf("Error reading message: %v\n", err)
+	        break
+	    }
+		//decode the json and create the message object
+	    var message Message
+	    err = json.Unmarshal([]byte(line), &message)
+	    if err != nil {
+	        fmt.Printf("Error unmarshalling message: %v\n", err)
+	        continue
+	    }
+		c.master.inCh <- message
+	}		
 }
 
 func (c *WorkerConnection) SendToWorker(content any) {
@@ -61,10 +67,10 @@ func (c *WorkerConnection) SendToWorker(content any) {
 	}
 }
 
-func (c *WorkerConnection) ProcessWorkerMessage(msg []byte) {
-
-	// 统一发给main thread处理
-	message := new(Message)
-	json.Unmarshal(msg, message)
-	c.master.inCh <- *message
-}
+//func (c *WorkerConnection) ProcessWorkerMessage(msg []byte) {
+//
+//	// 统一发给main thread处理
+//	message := new(Message)
+//	json.Unmarshal(msg, message)
+//	c.master.inCh <- *message
+//}

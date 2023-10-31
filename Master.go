@@ -12,15 +12,16 @@ type Master struct {
 	workersMap  map[int]*WorkerConnection // map id to worker connection
 	inCh        chan Message
 	finishCount int
+	numberOfworker int
 }
 
 func (m *Master) RegisterWorker(conn net.Conn) *WorkerConnection {
 	m.mapLock.Lock()
 	m.highestID++
 	wc := &WorkerConnection{
-		ID:     m.highestID,
+		ID:     m.highestID,  // ID assignment?
 		Addr:   conn.RemoteAddr().String(),
-		C:      make(chan any, 100),
+		C:      make(chan any, 100), //is it the channel of Message struct??
 		conn:   conn,
 		master: m,
 	}
@@ -72,7 +73,7 @@ func (m *Master) Start() {
 
 // HandleConnection handles each incoming connection and prints the client's address
 func (m *Master) HandleConnection(conn net.Conn) {
-	defer conn.Close()
+	//defer conn.Close() the connection is always on.
 	fmt.Println("New connection from", conn.RemoteAddr())
 	wc := m.RegisterWorker(conn)
 	go wc.Run()
