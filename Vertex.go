@@ -1,6 +1,6 @@
 package main
 
-import "main/message"
+
 import "fmt"
 //define state, 0 is IDLE and 1 is ACTIVE
 type State int
@@ -37,7 +37,7 @@ func NewVertex(id int, edges map[int]int, workerChan chan *Message) *Vertex {
 		state: IDLE,
 		edges: edges,
 		workerChan: workerChan,
-	}``
+	}
 	// distance to itself is 0
 	vertex.distance[vertex.id] = 0
 	// from the provided edges values, initialize the distance map.

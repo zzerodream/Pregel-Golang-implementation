@@ -28,11 +28,11 @@ type Message struct {
 	From int
 	To int
 	Value interface{}
-	Type int
+	Type Type
 }
 
 
-func NewMessage(sender int, target int, payload interface{}, t int) *Message {
+func NewMessage(sender int, target int, payload interface{}, t Type) *Message {
 	message := &Message {
 		From: sender,
 		To: target,

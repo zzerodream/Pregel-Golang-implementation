@@ -1,34 +1,4 @@
-/*Things to do:
-	1. Initialize vertex instance, channel initialization(buffered channel)   (done)
-	2. Master is the listening side for tcp connection, initialize connection.    (done)
-	3. Initialize connection with other worker. (done)
-	4. do we need a counter for log usage, which superstep are we in now. (still thinking)
-	5. When receiving StartSuperstep, proceed superstep 
-	6. After proceedsuperstep, inform the Master
-	7. Master side: once receive all Finished signal from the workers, announce StartExchange. (not worker's job)
-	8. Worker side received StartExchange:
-		a. check if the workerChan is empty, if empty send EMPTY type message, handle incoming message
-		b. else, send all the messages in workerChan, and also handle incoming message. After finished sending the messages, send Sent type message
-		c. for handleincoming message, need to unmarshal json object, find the destination and write it to the messagechan under each vertex. 
-		also need to change the state of the vertex.	
-	9. Wait for next StatSuperstep instructions.
 
-*/
-
-
-/*Worker initialization and things to do after initialization
-	1. initialize the workerChan and hold it under workerChan field, so that it can be used to initialize vertex.
-	2. hardcode the IPs and reverse_IPs field for now.
-	3. Vertices map[int]*Vertex should also be initialized.
-	4. call EstablishMasterConnection(MasterIP string, port int) and store the returned conn value under MasterConnection field
-	5. call func (w *Worker) StartListener(), start listening on the port 9999 in a new go
-	6. call func (w *Worker)ConnectToClientsWithLowerID() (*net.TCPConn, error) to estabish connection with other workers with lower ID.
-		store the conn under Connections map[int]net.Conn field.
-		but how to handle the case where worker tries to establish connection but other worker hasn't start listening?
-	7. workers call ReceiveGraphPartition(), will close once receive all partitions
-	8. Then workers can use a go routine to call ReceiveFromMaster() for other instructions from master. 
-
-*/
 package main
 import (
     "fmt"
@@ -53,37 +23,42 @@ type Worker struct {
 	MasterConnection net.Conn  //conn object with the msater
 	mutex        sync.Mutex 
 	numberOfWorkers int
-	//master IP?
+	MasterIP string
+	MasterPort int
 }
 
 
 //Establish connection with the master
-func (w *Worker) EstablishMasterConnection(MasterIP string, port int)error{
+func (w *Worker) EstablishMasterConnection(){
 	maxRetries := 3 // Number of retries
     retryDelay := 5*time.Second // Delay between retries
-	addr := fmt.Sprintf("%s:%d", MasterIP, port)
+	addr := fmt.Sprintf("%s:%d", w.MasterIP, w.MasterPort)
 	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
-		return fmt.Errorf("failed to resolve address: %v", err)
+		fmt.Printf("failed to resolve address: %v\n", err)
 	}
 	for retry := 0; retry < maxRetries; retry++ {
 		conn, err := net.DialTCP("tcp", nil, tcpAddr)
 		if err == nil {
 			w.MasterConnection = conn
-			return nil
+			fmt.Printf("Successfully established connection with the master")
 		}
 
 		fmt.Printf("Failed to establish connection to %s, retrying...\n", addr)
 		time.Sleep(retryDelay)
 	}
-	return fmt.Errorf("exhausted all retries, could not establish connection")
+	fmt.Printf("exhausted all retries, could not establish connection\n")
 }
 //establish connections with other workers
 //Worker needs to listen on IP:9999
 const basePort = 9999
 func (w *Worker) StartListener() {
 	listenAddr := fmt.Sprintf(":%d", basePort)
-	listener, _ := net.Listen("tcp", listenAddr)
+	listener, err := net.Listen("tcp", listenAddr)
+	if err != nil {
+	    fmt.Printf("Worker %d Error creating listener: %v\n", w.ID, err)
+	    return
+	}
 	defer listener.Close()
 
 	fmt.Printf("Worker %d listening on port %d\n", w.ID, basePort)
@@ -101,8 +76,9 @@ func (w *Worker) StartListener() {
 		w.mutex.Lock()
 		w.Connections[workerID] = conn
 		w.mutex.Unlock()
-		
-		//go handleClient(conn)
+		if len(w.Connections) == w.numberOfWorkers-1{
+			return
+		}
 	}
 }
 /*workers have higher ID will establish connection with workers with lower ID
@@ -112,33 +88,37 @@ let's say worker 1,2,3.
 	c. 3 will start listening on port 9999 and try to establish connection with worker 1, 2
 
 */
-func (w *Worker)ConnectToClientsWithLowerID() error{
+func (w *Worker)ConnectToWorkerssWithLowerID(){
 	maxRetries := 3 // Number of retries
-    retryDelay := 5*time.Second // Delay between retries
-
-    for id := 1; id < w.ID; id++ {
+    retryDelay := 2*time.Second // Delay between retries
+	time.Sleep(2*time.Second) //wait a few seconds before trying to establish connection, ensure that all workers have start listening
+    count := 0
+	for id := 1; id < w.ID; id++ {
         targetIP := w.IPs[id]
         addr := fmt.Sprintf("%s:%d", targetIP, basePort)
 		tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
 		if err != nil {
-			return fmt.Errorf("failed to resolve address: %v", err)
+			fmt.Printf("failed to resolve address: %v\n", err)
 		}
         for retry := 0; retry < maxRetries; retry++ {
             conn, err := net.DialTCP("tcp", nil, tcpAddr)
             if err == nil {
 				w.mutex.Lock()
+				count += 1
 				w.Connections[id] = conn
 				w.mutex.Unlock()
-                return nil
+				if count == w.ID-1{
+					return
+				}else{
+					continue
+				}
             }
-
-            fmt.Printf("Failed to establish connection to %s, retrying...\n", addr)
+            fmt.Printf("Failed to establish connection to %d, retrying...\n", id)
             time.Sleep(retryDelay)
         }
+		fmt.Printf("exhausted all retries, could not establish connection to %d",id)
     }
-
-    return fmt.Errorf("exhausted all retries, could not establish connection")
-
+	fmt.Printf("Successfully established connection with workers with lower ID")
 }
 
 //receive graph partition from master and will terminate once receive terminate message
@@ -180,7 +160,7 @@ func (w *Worker) ReceiveGraphPartition() {
 }
 // extract information from master
 // recall we define func NewVertex(id int, edges map[int]int, workerChan chan *Message) *Vertex
-func extractIDAndEdges(message Message) (int, map[int]int) {
+func extractIDAndEdges(message Message) (int, map[int]int, error) {
 	valueMap, ok := message.Value.(map[string]interface{})
 	if !ok {
 		return 0, nil, fmt.Errorf("Value is not a map")
@@ -198,7 +178,7 @@ func extractIDAndEdges(message Message) (int, map[int]int) {
 	if ok {
 		for k, v := range edges {
 			//convert key to int
-			edgeKey, err := strconv.Atoi(k)
+			edgeKey, _ := strconv.Atoi(k)
 			//assert that value is float type
 			edgeValue, ok := v.(float64)
 			if ok {
@@ -231,7 +211,7 @@ func (w *Worker) ReceiveFromMaster(){
 		switch message.Type{
 			// StartSuperstep message
 		case 0:
-			fmt.Println("Received instructions from the master to start next superstep\n")
+			fmt.Printf("Received instructions from the master to start next superstep\n")
 			//cal ProceedSuperstep()
 			w.ProceedSuperstep()
 			// After proceedsuperstep, inform the Master, mater ID field, computeFinished, type 1
@@ -243,14 +223,15 @@ func (w *Worker) ReceiveFromMaster(){
 				close(terminateChan)
 			}
 			terminateChan = make(chan struct{})
-			fmt.Println("Received instructions from the master to start exchanging message\n")
+			fmt.Printf("Received instructions from the master to start exchanging message\n")
 			// keep exchanging messages until receive a termination type
+			//send all outgoing messages in another go routine
+			go w.HandleAllOutgoingMessages()
 			//handle incoming messages buffer the messages
 			go w.HandleAllIncomingMessages(terminateChan)
 			//move the buffered messages to corresponding vertex
 			go w.ReadAndAssignMessages(terminateChan)
-			//send all outgoing messages in another go routine
-			go w.HandleAllOutgoingMessages()	
+	
 		case 8://exchange stopped 
 			if terminateChan != nil {
 				close(terminateChan)
@@ -263,24 +244,30 @@ func (w *Worker) ReceiveFromMaster(){
 //send message to Master
 func (w *Worker) SendMessageToMaster(message Message) {
     data, err := json.Marshal(message)
+    if err != nil {
+        fmt.Printf("failed to marshal the message: %v\n", err)
+    }	
     // seperate each data by \n
     data = append(data, '\n')
     _, err = w.MasterConnection.Write(data)
     if err != nil {
-        return fmt.Errorf("failed to send message to master: %v", err)
+        fmt.Printf("failed to send message to master: %v\n", err)
     }
 
 }
 //send to other worker
 func (w *Worker) SendMessageToWorker(workerID int, message Message) {
 	// get the conn through workerID
-	conn := Connections[workerID]
+	conn := w.Connections[workerID]
     data, err := json.Marshal(message)
+	if err != nil {
+        fmt.Printf("failed to marshal the message: %v\n", err)
+    }	
     // seperate each data by \n
     data = append(data, '\n')
     _, err = conn.Write(data)
     if err != nil {
-        return fmt.Errorf("failed to send message to master: %v", err)
+        fmt.Printf("failed to send message to other worker: %v\n", err)
     }
 }
 // ProceedSuperstep processes one superstep for all vertices.
@@ -292,41 +279,53 @@ func (w *Worker) ProceedSuperstep() {
 			defer wg.Done()
 			if v.state == ACTIVE {
 				v.Compute()
-				v.IncomingMessages = []*Message{} // Clear messages after processing
+				//v.IncomingMessages = []*Message{}
 				v.state = IDLE
 			}
 		}(vertex)
 	}
 	wg.Wait()
 	//Finished proceed the superstep
-
 }
 //handle all incoming messages
 func (w *Worker) HandleAllIncomingMessages(terminate chan struct{}) {
-	for {
-        select {
-        case <-terminate:
-            // Terminate the loop/routine
-            return
-        default:
-			for id, conn := range w.Connections {
-				go w.handleIncomingMessagesFromConn(id, conn)
-			}
-        }
-    }
+	activeConns := make(map[int]bool) // to avoid multiple goroutines on the same connection
+	for id, conn := range w.Connections {
+		// if we haven't created a go routine to handle this conn, create one. else do nothing
+		if !activeConns[id] { 
+			activeConns[id] = true
+			go w.handleIncomingMessagesFromConn(id, conn, terminate)
+		}
+	}
+	// wait for the termination signal
+	<-terminate
+	return
 }
 
 //handle function for each connection
-func (w *Worker) handleIncomingMessagesFromConn(id int, conn net.Conn) {
+func (w *Worker) handleIncomingMessagesFromConn(id int, conn net.Conn, terminate chan struct{}) {
 	fmt.Printf("Worker %d is handling messages from worker %d", w.ID, id)
     reader := bufio.NewReader(conn)
     for {
+		select{
+		case <- terminate:
+			return
+		default:
+		}
+		// a timeout mechanism so that it won't be block if there's no message to read and keep looping, so that we can check the termination signal correctly
+		conn.SetReadDeadline(time.Now().Add(1 * time.Second))
         // Reading a message, for instance, separated by '\n'
         line, err := reader.ReadString('\n')
-        if err != nil {
-			fmt.Printf("Error reading message: %v\n", err)
-	        break
-        }
+		if err != nil {
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				// It's a timeout error; continue looping to check the terminate signal
+				continue
+			} else {
+				// It's some other error
+				fmt.Printf("Error reading message: %v\n", err)
+				return
+			}
+		}
         // Process the received message here, todo: unmarshal the message and buffer the message in the MessageQueue []Message
 		var message Message
 	    err = json.Unmarshal([]byte(line), &message)
@@ -345,25 +344,25 @@ func (w *Worker) ReadAndAssignMessages(terminate chan struct{})  {
 	for {
         select {
         case <-terminate:
-            // Terminate the loop/routine
+            // exit
             return
         default:
-			w.mutex.Lock()
-            // Copy the current queue and clear the original
-            messagesToProcess := w.MessageQueue
-			//clear the queue and release the lock
-            w.MessageQueue = w.messageQueue[:0]
-            w.mutex.Unlock()
-			for _, msg := range w.MessageQueue {
-				//for log info
-				fmt.Printf("Reading message from %d to %d of type %d\n", msg.From, msg.To, msg.Type)
-				//assign to correct vertex
-				v := w.Vertices[msg.To]
-				v.IncomingMessages = append(v.IncomingMessages, msg)
-				//update the vertex state
-				v.UpdateState(ACTIVE)
-			}
         }
+		w.mutex.Lock()
+		// Copy the current queue and clear the original
+		messagesToProcess := w.MessageQueue
+		//clear the queue and release the lock
+		w.MessageQueue = w.MessageQueue[:0]
+		w.mutex.Unlock()
+		for _, msg := range messagesToProcess {
+			//for log info
+			fmt.Printf("Reading message from %d to %d of type %d\n", msg.From, msg.To, msg.Type)
+			//assign to correct vertex
+			v := w.Vertices[msg.To]
+			v.IncomingMessages = append(v.IncomingMessages, msg)
+			//update the vertex state
+			v.UpdateState(ACTIVE)
+		}
     }	
 }
 //handle all outgoing messages in workChan
@@ -396,10 +395,12 @@ func (w *Worker) HandleAllOutgoingMessages() {
 				// At the very beginning, no message in the channel, send message to master. Type 3.
 				EmptyMessage := NewMessage(w.ID, -999, nil, 3)
 				w.SendMessageToMaster(*EmptyMessage)
+				return
 			}else{
 				//send type2 Worker has finished sending out all outgoing messages.
 				FinishedSendingMessage := NewMessage(w.ID, -999, nil, 2)
 				w.SendMessageToMaster(*FinishedSendingMessage)
+				return
 			}
 		}
 	}
