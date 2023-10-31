@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"time"
 )
 
 type Master struct {
@@ -74,7 +75,12 @@ func (m *Master) Start() {
 			break
 		}
 	}
+	time.Sleep(3*time.Second)
 	m.GraphDistribution()
+	fmt.Println("partition finished, wait for a few seconds")
+	time.Sleep(3*time.Second)
+	fmt.Println("All partition has been sent")
+	m.InformPartitionFinish()
 	m.InstructNextStep()
 }
 
@@ -93,7 +99,7 @@ func (m *Master) GraphDistribution() {
 	parts := Partition(nodes, 3)
 	fmt.Println(parts)
 	m.mapLock.Lock()
-	receiverID := 0
+	receiverID := 1
 	for _, part := range parts {
 		for _, node := range part {
 			m.workersMap[receiverID].C <- node
@@ -124,6 +130,19 @@ func (m *Master) InstructExchange() {
 			Value: nil,
 			Type:  EXCHANGE_START,
 		}
+	}
+	m.mapLock.Unlock()
+}
+
+func (m *Master) InformPartitionFinish(){
+	m.mapLock.Lock()
+	for i, connection := range m.workersMap {
+	  connection.C <- Message{
+		From:  0,
+		To:    i,
+		Value: nil,
+		Type:  ASSIGN_FINISHED,
+	  }
 	}
 	m.mapLock.Unlock()
 }

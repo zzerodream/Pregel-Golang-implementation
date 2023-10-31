@@ -134,6 +134,7 @@ func (w *Worker)ConnectToWorkerssWithLowerID(){
 
 //receive graph partition from master and will terminate once receive terminate message
 func (w *Worker) ReceiveGraphPartition() {
+	fmt.Println("Start receving graph partition from the master")
 	reader := bufio.NewReader(w.MasterConnection)
 	for {
 		//assume that every message from master is sepetated by '\n'
@@ -158,6 +159,7 @@ func (w *Worker) ReceiveGraphPartition() {
 		//receive graph partition, we will initialize vertex instance.
 		if message.Type == 6{
 			VertexID, edges, err := extractIDAndEdges(message)
+			fmt.Printf("Received messaged with vertexID %d, and edges %v\n",VertexID, edges)
 			if err != nil {
 				fmt.Printf("Error extracting data: %v\n", err)
 				continue

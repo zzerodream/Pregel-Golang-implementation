@@ -23,6 +23,7 @@ func (c *WorkerConnection) Run() {
 	// maybe we don't need this for for loop here
 	for {
 		for serverMessage := range c.C {
+			fmt.Println(serverMessage)
 			c.SendToWorker(serverMessage)
 		}
 	}
@@ -63,6 +64,7 @@ func (c *WorkerConnection) SendToWorker(content any) {
 		if err != nil {
 			fmt.Println(err)
 		}
+		jsonBytes = append(jsonBytes,'\n')
 		c.conn.Write(jsonBytes)
 	}
 }
