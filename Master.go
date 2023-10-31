@@ -15,6 +15,7 @@ type Master struct {
 	finishCount    int
 	numberOfWorker int
 	connectedNum   int
+	emptyCount int
 }
 
 func (m *Master) RegisterWorker(conn net.Conn) *WorkerConnection {
@@ -41,17 +42,17 @@ func NewMaster() *Master {
 		finishCount:    0,
 		numberOfWorker: 1,
 		connectedNum:   0,
+		emptyCount: 0,
 	}
 }
 
 func (m *Master) ListenWorkerConnections() {
 	for {
 		inMessage := <-m.inCh
-		fmt.Println(inMessage)
+		//fmt.Println(inMessage)
 		m.ProcessMessage(inMessage)
 	}
 }
-
 func (m *Master) Start() {
 	// Create a TCP listener on port 8080
 	listener, err := net.Listen("tcp", ":8080")
@@ -78,9 +79,11 @@ func (m *Master) Start() {
 	time.Sleep(3*time.Second)
 	m.GraphDistribution()
 	fmt.Println("partition finished, wait for a few seconds")
-	time.Sleep(3*time.Second)
+	time.Sleep(1*time.Second)
 	fmt.Println("All partition has been sent")
 	m.InformPartitionFinish()
+	time.Sleep(5*time.Second)
+	fmt.Println("Let's proceed the superstep")
 	m.InstructNextStep()
 }
 
@@ -146,6 +149,31 @@ func (m *Master) InformPartitionFinish(){
 	}
 	m.mapLock.Unlock()
 }
+func (m *Master) InstructExit(){
+	m.mapLock.Lock()
+	for i, connection := range m.workersMap {
+	  connection.C <- Message{
+		From:  0,
+		To:    i,
+		Value: nil,
+		Type:  EXIT,
+	  }
+	}
+	m.mapLock.Unlock()
+}
+
+func (m *Master) InstructExchangeStop(){
+	m.mapLock.Lock()
+	for i, connection := range m.workersMap {
+	  connection.C <- Message{
+		From:  0,
+		To:    i,
+		Value: nil,
+		Type:  EXCHANGE_STOP,
+	  }
+	}
+	m.mapLock.Unlock()
+}
 
 func (m *Master) ProcessMessage(message Message) {
 	switch message.Type {
@@ -157,9 +185,37 @@ func (m *Master) ProcessMessage(message Message) {
 		}
 	case SEND_FINISH:
 		m.finishCount++
-		if m.finishCount == m.numberOfWorker {
-			m.InstructNextStep()
+		fmt.Printf("finishCount: %d\n",m.finishCount)
+		if m.finishCount == m.numberOfWorker{
+			time.Sleep(2*time.Second)
+			m.InstructExchangeStop()
 			m.finishCount = 0
+			time.Sleep(2*time.Second)
+			m.InstructNextStep()
+			
+		}
+		if m.emptyCount + m.finishCount == m.numberOfWorker {
+			time.Sleep(5*time.Second)
+			m.InstructExchangeStop()
+			m.finishCount = 0
+			m.emptyCount = 0
+			time.Sleep(1*time.Second)
+			m.InstructNextStep()
+		}
+
+	case SEND_EMPTY:
+		m.emptyCount++
+		fmt.Printf("emptyCount: %d finishCount: %d\n",m.emptyCount, m.finishCount)
+		if m.emptyCount == m.numberOfWorker {
+			m.InstructExit()
+		}
+		if m.emptyCount + m.finishCount == m.numberOfWorker {
+			time.Sleep(5*time.Second)
+			m.InstructExchangeStop()
+			m.finishCount = 0
+			m.emptyCount = 0
+			time.Sleep(1*time.Second)
+			m.InstructNextStep()
 		}
 
 	}

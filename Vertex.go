@@ -2,6 +2,7 @@ package main
 
 
 import "fmt"
+import "math"
 //define state, 0 is IDLE and 1 is ACTIVE
 type State int
 
@@ -19,31 +20,29 @@ const (
 */
 type Vertex struct {
 	id int
-	distance map[int]int
+	Value float64
+	//distance map[int]int
 	state State
 	edges map[int]int
 	//MessageChan chan *message.Message
 	IncomingMessages []Message  //for incoming message
 	//workerChan chan *message.Message
-	workerChan chan *Message //for outgoing messages, should be a buffered channel!
+	workerChan chan Message //for outgoing messages, should be a buffered channel!
 }
 
-func NewVertex(id int, edges map[int]int, workerChan chan *Message) *Vertex {
+func NewVertex(id int, edges map[int]int, workerChan chan Message) *Vertex {
 	//create the vertex and return the address of it.
 	vertex := &Vertex {
 		id: id,
-		distance: make(map[int]int),
+		//distance: make(map[int]int),
 		//state: ACTIVE,
+		Value: math.Inf(1),
 		state: IDLE,
 		edges: edges,
 		workerChan: workerChan,
 	}
 	// distance to itself is 0
-	vertex.distance[vertex.id] = 0
-	// from the provided edges values, initialize the distance map.
-	for to, weight := range edges {
-		vertex.distance[to] = weight
-	}
+	vertex.Value = math.Inf(1)
 	// go vertex.SendMessagesToWorker() 
 	return vertex
 }
@@ -54,8 +53,13 @@ func (v *Vertex) UpdateState(newState State) {
 //send all outgoing messages to Worker.
 func (v *Vertex) SendMessageToWorker() {
 	for neighbour, _ := range v.edges {
-		newMsg := NewMessage(v.id, neighbour, v.distance, 5)
-		go func(msg *Message) {
+		newMsg := Message{
+			From:  v.id,
+			To:    neighbour,
+			Value: v.Value,
+			Type:  5,
+		}
+		go func(msg Message) {
 			v.workerChan <- msg
 		}(newMsg)
 	}
@@ -63,66 +67,23 @@ func (v *Vertex) SendMessageToWorker() {
 //compute function.
 func (v *Vertex) Compute() {
 	fmt.Printf("Vertex %d: Calculating\n", v.id)
-	anyChange := false
-
-//ReadLoop:
-//	for {
-//		select {
-//		case message, ok := <-v.MessageChan:
-//			if !ok {
-//				// The channel is closed, exit the loop
-//				break ReadLoop
-//			}
-//			//modify the log a bit.
-//			fmt.Printf("Vertex %d: Dealing with %v\n", v.id, message.Value)
-//			from := message.From
-//			payload := message.Value.(map[int]int)
-//			for target, dist := range payload {
-//				myDistance, exists := v.distance[target]
-//				if exists {
-//					if (v.distance[from] + dist) < myDistance {
-//						v.distance[target] = v.distance[from] + dist
-//						anyChange = true
-//					}
-//				} else {
-//					v.distance[target] = dist
-//					anyChange = true
-//				}
-//			}
-//			fmt.Printf("Vertex %d: Finished Dealing with %v, Distance: %v\n", v.id, message.Value, v.distance)
-//		default:
-//			break ReadLoop
-//		}
-//	}
-	for len(v.IncomingMessages) > 0 {
-		// Take the first message from the slice
-		message := v.IncomingMessages[0]
-	
-		// Process the message (this part remains unchanged)
-		fmt.Printf("Vertex %d: Dealing with %v\n", v.id, message.Value)
-		from := message.From
-		payload := message.Value.(map[int]int)
-		for target, dist := range payload {
-			myDistance, exists := v.distance[target]
-			if exists {
-				if (v.distance[from] + dist) < myDistance {
-					v.distance[target] = v.distance[from] + dist
-					anyChange = true
-				}
-			} else {
-				v.distance[target] = dist
-				anyChange = true
+	updated := false // Track if the vertex's Value is updated in this superstep
+    for _, msg := range v.IncomingMessages {
+		fmt.Printf("Vertex %d: Dealing with %v\n", v.id, msg.Value)
+		if value, ok := msg.Value.(float64); ok {
+			potentialDistance := value + float64(v.edges[msg.From])
+			if potentialDistance < v.Value {
+				fmt.Println("updating distance!")
+				v.Value = potentialDistance
+				updated = true
 			}
 		}
-		fmt.Printf("Vertex %d: Finished Dealing with %v, Distance: %v\n", v.id, message.Value, v.distance)
-	
-		// Remove the processed message from the slice
-		v.IncomingMessages = v.IncomingMessages[1:]
+    }
+    if updated {
+        v.SendMessageToWorker() // Assume some function workerIDFor to get the correct worker ID
+		fmt.Printf("Vertex %d has updated value to neighbors\n", v.id)
 	}
-	//should this state change done in worker side?	
-	//v.state = IDLE
-	if anyChange {
-		go v.SendMessageToWorker()
-	}
+	v.UpdateState(IDLE)
 	fmt.Printf("Vertex %d: State: %d\n", v.id, v.state)
+	return
 }

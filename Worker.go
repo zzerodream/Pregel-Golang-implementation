@@ -16,7 +16,7 @@ type Worker struct {
 	ID      int
 	Vertices map[int]*Vertex 
 	MessageQueue []Message //buffer the incoming message
-	workerChan chan *Message //should be initialized when worker struc is initialized.
+	workerChan chan Message //should be initialized when worker struc is initialized.
 	IPs map[int]string //other worker's IP {1:ip,2:ip} worker id to ip
 	reverse_IPs map[string]int //ip:1, ip:2  ip to worker id
 	Connections map[int]net.Conn  // ID -> conn
@@ -25,6 +25,8 @@ type Worker struct {
 	numberOfWorkers int
 	MasterIP string
 	MasterPort int
+	sourceVertex int
+	superstep int
 }
 
 
@@ -166,6 +168,16 @@ func (w *Worker) ReceiveGraphPartition() {
 			}
 			//now we have the ID. edges and WorkerChannel, initialize the vertex struc
 			v := NewVertex(VertexID, edges, w.workerChan)
+			if VertexID == w.sourceVertex{
+				fmt.Printf("Source vertex is on this worker, enqueue the initial kickoff message\n")
+				msg := Message{
+					From:  0,
+					To:    w.ID,
+					Value: 0.0,
+					Type:  5,
+				}
+				w.EnqueueMessage(msg)
+			}
 			//hold the vertices info under worker.Vertices
 			w.Vertices[VertexID] = v
 		}
@@ -226,6 +238,7 @@ func (w *Worker) ReceiveFromMaster(){
 		case 0:
 			fmt.Printf("Received instructions from the master to start next superstep\n")
 			//cal ProceedSuperstep()
+			w.superstep +=1
 			w.ProceedSuperstep()
 			// After proceedsuperstep, inform the Master, mater ID field, computeFinished, type 1
 			FinishedSuperstepMessage := NewMessage(w.ID, -999, nil, 1)
@@ -250,6 +263,14 @@ func (w *Worker) ReceiveFromMaster(){
 				close(terminateChan)
 				terminateChan = nil
 			}
+		
+		case 9://exit
+			fmt.Println("Receive exit signal")
+			for _, vertex := range(w.Vertices){
+				fmt.Printf("Final result, vertex %d hold the value of %f\n",vertex.id,vertex.Value)
+			}
+			fmt.Println("Exiting")
+			return
 		}
 	}
 }
@@ -395,24 +416,33 @@ func (w *Worker) HandleAllOutgoingMessages() {
 			}
 			wg.Add(1)
 			//channel passed the pointer instead of Message struc itself.
-			go func(m *Message) {
+			go func(m Message) {
 				//todo: send messages to corresponding worker
-				To := m.To
-				workerID := To%w.numberOfWorkers
-				w.SendMessageToWorker(workerID, *m)
+				//**************************************************just for demo********************************************88
+				To := 1
+				if To == w.ID{
+					fmt.Println("Same machine, won't use tcp for exchanging messages.")
+					w.EnqueueMessage(m)
+				}else{
+					To := m.To
+					workerID := To%w.numberOfWorkers
+					w.SendMessageToWorker(workerID, m)
+				}
 				defer wg.Done()
 			}(msg)
 		default:
 			wg.Wait()
-			if !sendMessage{
+			if !sendMessage && w.superstep != 1{
 				// At the very beginning, no message in the channel, send message to master. Type 3.
 				EmptyMessage := NewMessage(w.ID, -999, nil, 3)
 				w.SendMessageToMaster(*EmptyMessage)
+				fmt.Printf("Worker %d has no outgoing messages to send.\n",w.ID)
 				return
 			}else{
 				//send type2 Worker has finished sending out all outgoing messages.
 				FinishedSendingMessage := NewMessage(w.ID, -999, nil, 2)
 				w.SendMessageToMaster(*FinishedSendingMessage)
+				fmt.Printf("Worker %d has sent out all outgoing messages.\n",w.ID)
 				return
 			}
 		}
@@ -425,14 +455,16 @@ func NewWorker() *Worker{
 		ID:             1,
 		Vertices:       make(map[int]*Vertex),
 		MessageQueue:   []Message{},
-		workerChan:     make(chan *Message,100),
+		workerChan:     make(chan Message,100),
 		IPs:            make(map[int]string),
 		reverse_IPs:    make(map[string]int),
 		Connections:    make(map[int]net.Conn),
 		mutex:          sync.Mutex{},
-		numberOfWorkers:  5, // set number of workers,
+		numberOfWorkers:  1, // set number of workers,
 		MasterIP: "localhost", //set the IP of the msater
 		MasterPort: 8080, //set port number
+		sourceVertex: 1,
+		superstep: 0,
 	}
 }
 // call all necessary functions for the worker
@@ -459,6 +491,7 @@ func (w *Worker) Run(){
 	}()
 	// only proceed after receving all partitions and establish all connections
 	wg.Wait()
+	fmt.Println("Start listening instructions from Master")
 	//continue receiving instructions from master.
 	w.ReceiveFromMaster()
 

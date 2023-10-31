@@ -23,9 +23,8 @@ func (c *WorkerConnection) Run() {
 	// maybe we don't need this for for loop here
 	for {
 		for serverMessage := range c.C {
-			fmt.Println(serverMessage)
 			c.SendToWorker(serverMessage)
-		}
+		} 
 	}
 }
 
@@ -45,13 +44,20 @@ func (c *WorkerConnection) RecvWorkers() {
 			fmt.Printf("Error unmarshalling message: %v\n", err)
 			continue
 		}
+		fmt.Printf("Received messages from worker %d with type %d.\n", message.From, message.Type)
 		c.master.inCh <- message
 	}
 }
 
 func (c *WorkerConnection) SendToWorker(content any) {
-	if parsedContent, ok := content.(string); ok {
-		c.conn.Write([]byte(parsedContent))
+	if msg, ok := content.(Message); ok {
+		jsonBytes, err := json.Marshal(msg)
+		if err != nil {
+			fmt.Println(err)
+		}
+		jsonBytes = append(jsonBytes,'\n')
+		c.conn.Write(jsonBytes)
+		fmt.Printf("Sent message from Master to worker %d with type %d\n",msg.To, msg.Type)
 	} else if parsedContent, ok := content.(Node); ok {
 		// TODO: how to set the fields
 		msg := Message{
@@ -66,6 +72,7 @@ func (c *WorkerConnection) SendToWorker(content any) {
 		}
 		jsonBytes = append(jsonBytes,'\n')
 		c.conn.Write(jsonBytes)
+		fmt.Printf("Sent message from Master to worker %d with type %d\n",msg.To, msg.Type)
 	}
 }
 

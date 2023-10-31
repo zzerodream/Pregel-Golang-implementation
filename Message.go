@@ -11,6 +11,7 @@ const (
 	ASSIGN_VERTEX
 	ASSIGN_FINISHED
 	EXCHANGE_STOP
+	EXIT
 )
 
 /*message
@@ -23,6 +24,7 @@ const (
 	type 6 AssignPartition → “Master send vertex infos to worker at the beginning”
 	Type 7 PartitionSent → “Master inform worker it has sent all partitions to it”
 	Type 8 ExchangeStopped. -> “Master inform worker to stop exchange message including handle incoming and outgoing messages”
+	Type 9 EXIT --> Algo finished, exit
 */
 type Message struct {
 	From int
