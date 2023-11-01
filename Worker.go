@@ -9,6 +9,7 @@ import (
     "encoding/json"
     "strconv"
 	"time"
+	"os"
 )
 
 // Worker represents a worker in the system.
@@ -16,7 +17,7 @@ type Worker struct {
 	ID      int
 	Vertices map[int]*Vertex 
 	MessageQueue []Message //buffer the incoming message
-	workerChan chan Message //should be initialized when worker struc is initialized.
+	workerChan chan *Message //should be initialized when worker struc is initialized.
 	IPs map[int]string //other worker's IP {1:ip,2:ip} worker id to ip
 	reverse_IPs map[string]int //ip:1, ip:2  ip to worker id
 	Connections map[int]net.Conn  // ID -> conn
@@ -269,8 +270,8 @@ func (w *Worker) ReceiveFromMaster(){
 			for _, vertex := range(w.Vertices){
 				fmt.Printf("Final result, vertex %d hold the value of %f\n",vertex.id,vertex.Value)
 			}
-			fmt.Println("Exiting")
-			return
+			fmt.Println("Exiting...")
+			os.Exit(0)
 		}
 	}
 }
@@ -416,16 +417,15 @@ func (w *Worker) HandleAllOutgoingMessages() {
 			}
 			wg.Add(1)
 			//channel passed the pointer instead of Message struc itself.
-			go func(m Message) {
+			go func(m *Message) {
 				//todo: send messages to corresponding worker
-				//**************************************************just for demo********************************************88
 				To := m.To
 				workerID := To%w.numberOfWorkers
 				if workerID == 0{
 					fmt.Println("Same machine, won't use tcp for exchanging messages.")
-					w.EnqueueMessage(m)
+					w.EnqueueMessage(*m)
 				}else{
-					w.SendMessageToWorker(workerID, m)
+					w.SendMessageToWorker(workerID, *m)
 				}
 				defer wg.Done()
 			}(msg)
@@ -449,12 +449,12 @@ func (w *Worker) HandleAllOutgoingMessages() {
 }
 
 //
-func NewWorker() *Worker{
+func NewWorker(ID int) *Worker{
 	return &Worker{
-		ID:             1,
+		ID:             ID,
 		Vertices:       make(map[int]*Vertex),
 		MessageQueue:   []Message{},
-		workerChan:     make(chan Message,100),
+		workerChan:     make(chan *Message,100),
 		IPs:            make(map[int]string),
 		reverse_IPs:    make(map[string]int),
 		Connections:    make(map[int]net.Conn),

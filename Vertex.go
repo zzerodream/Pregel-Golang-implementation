@@ -27,10 +27,10 @@ type Vertex struct {
 	//MessageChan chan *message.Message
 	IncomingMessages []Message  //for incoming message
 	//workerChan chan *message.Message
-	workerChan chan Message //for outgoing messages, should be a buffered channel!
+	workerChan chan *Message //for outgoing messages, should be a buffered channel!
 }
 
-func NewVertex(id int, edges map[int]int, workerChan chan Message) *Vertex {
+func NewVertex(id int, edges map[int]int, workerChan chan *Message) *Vertex {
 	//create the vertex and return the address of it.
 	vertex := &Vertex {
 		id: id,
@@ -53,13 +53,13 @@ func (v *Vertex) UpdateState(newState State) {
 //send all outgoing messages to Worker.
 func (v *Vertex) SendMessageToWorker() {
 	for neighbour, _ := range v.edges {
-		newMsg := Message{
+		newMsg := &Message{
 			From:  v.id,
 			To:    neighbour,
 			Value: v.Value,
 			Type:  5,
 		}
-		go func(msg Message) {
+		go func(msg *Message) {
 			v.workerChan <- msg
 		}(newMsg)
 	}

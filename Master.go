@@ -5,6 +5,7 @@ import (
 	"net"
 	"sync"
 	"time"
+	//"os"
 )
 
 type Master struct {
@@ -103,10 +104,9 @@ func (m *Master) GraphDistribution() {
 	fmt.Println(parts)
 	m.mapLock.Lock()
 	//TODO: disttibute the graph. Now only work for one worker, we need to know all workers.
-	receiverID := 1
-	for _, part := range parts {
+	for targetID, part := range parts {
 		for _, node := range part {
-			m.workersMap[receiverID].C <- node
+			m.workersMap[targetID+1].C <- node
 		}
 	}
 	m.mapLock.Unlock()
@@ -209,6 +209,9 @@ func (m *Master) ProcessMessage(message Message) {
 		fmt.Printf("emptyCount: %d finishCount: %d\n",m.emptyCount, m.finishCount)
 		if m.emptyCount == m.numberOfWorker {
 			m.InstructExit()
+			fmt.Println("No more exchanging messages and all vertices are IDLE, send EXIT message to all workers")
+			time.Sleep(5*time.Second)
+			return
 		}
 		if m.emptyCount + m.finishCount == m.numberOfWorker {
 			time.Sleep(5*time.Second)
