@@ -1,24 +1,19 @@
 # Mini Pregel
 
-
-A Go implementation of Google's distributed large graph processing system - Pregel
-
-Things I have modified for Vertex.go:  
-	1. for MessageChan, use a slice of Message instead of channel, and rename it as IncomingMessages  
-	2. When initializing the vertex, the initial state is IDLE.   
-	3. initializing the channel will be done at the worker side.  
-	4. All the vertices share the same MessageChan with the worker.  
-	5. Rename SendMessageToServer as SendMessageToWorker  
+### VM configuration
+- install ubuntu 22.04
+- install go
+- install other tools like net-tools, openssh_server (for scp to copy file from host to VM)   
+- Exit VM, set network adapter using host-only adapter in virtualbox GUI  
+- Start VM again.  
 
 
-Other modifications:  
-    1. Rename MessageTypes.go as Message.go, includes the defination for message struct and update the MessageType.  
-    2. update Worker.go  
-    3. Functions to establish connections are all under Worker.go, StartWorker.go is kind of like the main function to start a worker 
-	4. All ID starts from 1 instead of 0
+### How to run
 
-
-Things to do:  
-- How does the master know when to start the first superstep after workers receive the partition (extra message type or just a short timeout after sending the partitions)
-
-- 
+I am using three VMs  
+- 1. hardcode IPADD and IPADD_R in main.go {workerID: ip_addr} and {ip_addr: workerID}, run ifconfig to check ip   
+- 2. change MASTERIP in main.go accordingly.  
+- 3. git clone/scp the code to VM  
+For master go run . master.  
+For worker1: go run . worker 1                    
+For worker2: go run . worker 2   
