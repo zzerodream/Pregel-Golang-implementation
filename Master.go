@@ -41,7 +41,7 @@ func NewMaster() *Master {
 		workersMap:     make(map[int]*WorkerConnection),
 		inCh:           make(chan Message, 500),
 		finishCount:    0,
-		numberOfWorker: 1,
+		numberOfWorker: 2,
 		connectedNum:   0,
 		emptyCount: 0,
 	}
@@ -100,7 +100,7 @@ func (m *Master) HandleConnection(conn net.Conn) {
 
 func (m *Master) GraphDistribution() {
 	nodes := ParseInput("SampleInput.json")
-	parts := Partition(nodes, 1)
+	parts := Partition(nodes, m.numberOfWorker)
 	fmt.Println(parts)
 	m.mapLock.Lock()
 	//TODO: disttibute the graph. Now only work for one worker, we need to know all workers.
@@ -186,7 +186,7 @@ func (m *Master) ProcessMessage(message Message) {
 		}
 	case SEND_FINISH:
 		m.finishCount++
-		fmt.Printf("finishCount: %d\n",m.finishCount)
+		fmt.Printf("emptyCount: %d finishCount: %d\n",m.emptyCount, m.finishCount)
 		if m.finishCount == m.numberOfWorker{
 			time.Sleep(2*time.Second)
 			m.InstructExchangeStop()

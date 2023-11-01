@@ -85,8 +85,8 @@ func (w *Worker) StartListener() {
 		w.mutex.Lock()
 		w.Connections[workerID] = conn
 		w.mutex.Unlock()
+		fmt.Printf("Successfully established connection with workers with worker %d\n", workerID)
 		if count == w.numberOfWorkers-w.ID{ //If all workers with higher ID has established connection with current worker, return.
-			
 			return
 		}
 	}
@@ -115,12 +115,14 @@ func (w *Worker)ConnectToWorkerssWithLowerID(){
 			fmt.Printf("failed to resolve address: %v\n", err)
 		}
         for retry := 0; retry < maxRetries; retry++ {
+			fmt.Printf("Trying to connect with master %d\n",id)
             conn, err := net.DialTCP("tcp", nil, tcpAddr)
             if err == nil {
 				w.mutex.Lock()
 				count += 1
 				w.Connections[id] = conn
 				w.mutex.Unlock()
+				fmt.Printf("Successfully established connection with worker %d.\n", id)
 				if count == w.ID-1{
 					return
 				}else{
@@ -132,7 +134,7 @@ func (w *Worker)ConnectToWorkerssWithLowerID(){
         }
 		fmt.Printf("exhausted all retries, could not establish connection to %d\n",id)
     }
-	fmt.Printf("Successfully established connection with workers with lower ID\n")
+	
 }
 
 //receive graph partition from master and will terminate once receive terminate message
@@ -260,6 +262,7 @@ func (w *Worker) ReceiveFromMaster(){
 			go w.ReadAndAssignMessages(terminateChan)
 	
 		case 8://exchange stopped 
+			fmt.Printf("Received instructions from the master to stop exchanging message\n")
 			if terminateChan != nil {
 				close(terminateChan)
 				terminateChan = nil
@@ -293,6 +296,7 @@ func (w *Worker) SendMessageToMaster(message Message) {
 //send to other worker
 func (w *Worker) SendMessageToWorker(workerID int, message Message) {
 	// get the conn through workerID
+	
 	conn := w.Connections[workerID]
     data, err := json.Marshal(message)
 	if err != nil {
@@ -300,7 +304,9 @@ func (w *Worker) SendMessageToWorker(workerID int, message Message) {
     }	
     // seperate each data by \n
     data = append(data, '\n')
+	w.mutex.Lock()
     _, err = conn.Write(data)
+	w.mutex.Unlock()
     if err != nil {
         fmt.Printf("failed to send message to other worker: %v\n", err)
     }
@@ -420,12 +426,23 @@ func (w *Worker) HandleAllOutgoingMessages() {
 			go func(m *Message) {
 				//todo: send messages to corresponding worker
 				To := m.To
-				workerID := To%w.numberOfWorkers
-				if workerID == 0{
-					fmt.Println("Same machine, won't use tcp for exchanging messages.")
-					w.EnqueueMessage(*m)
-				}else{
-					w.SendMessageToWorker(workerID, *m)
+				whichworker := To%w.numberOfWorkers
+				if whichworker == 0 {	
+					if w.ID == 2{
+						fmt.Println("Same machine, won't use tcp for exchanging messages.")
+						w.EnqueueMessage(*m)
+					} else if w.ID == 1{
+						fmt.Println("Vertex belongs to Machine 2 (Even IDs)")
+						w.SendMessageToWorker(2, *m)
+					}
+				} else {
+					if w.ID == 1{
+						fmt.Println("Same machine, won't use tcp for exchanging messages.")
+						w.EnqueueMessage(*m)
+					} else if w.ID == 2{
+						fmt.Println("Vertex belongs to Machine 1 (Odd IDs)")
+						w.SendMessageToWorker(1, *m)
+					}
 				}
 				defer wg.Done()
 			}(msg)
@@ -450,7 +467,7 @@ func (w *Worker) HandleAllOutgoingMessages() {
 
 //
 func NewWorker(ID int) *Worker{
-	return &Worker{
+	worker := &Worker{
 		ID:             ID,
 		Vertices:       make(map[int]*Vertex),
 		MessageQueue:   []Message{},
@@ -459,12 +476,15 @@ func NewWorker(ID int) *Worker{
 		reverse_IPs:    make(map[string]int),
 		Connections:    make(map[int]net.Conn),
 		mutex:          sync.Mutex{},
-		numberOfWorkers:  1, // set number of workers,
-		MasterIP: "localhost", //set the IP of the msater
+		numberOfWorkers:  2, // set number of workers,
+		MasterIP: MASTERIP, //set the IP of the msater
 		MasterPort: 8080, //set port number
 		sourceVertex: 1,
 		superstep: 0,
 	}
+	worker.IPs = IPADD
+	worker.reverse_IPs = IPADD_R
+	return worker
 }
 // call all necessary functions for the worker
 func (w *Worker) Run(){
@@ -490,6 +510,9 @@ func (w *Worker) Run(){
 	}()
 	// only proceed after receving all partitions and establish all connections
 	wg.Wait()
+	for key, conn := range w.Connections {
+		fmt.Printf("Key: %d, Connection: %v\n", key, conn)
+	}
 	fmt.Println("Start listening instructions from Master")
 	//continue receiving instructions from master.
 	w.ReceiveFromMaster()

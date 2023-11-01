@@ -1,5 +1,14 @@
-newworker field:
+newWorker field:
     1. master ip
     2. numberofWorker
     3. IPs map[int]string //other worker's IP {1:ip,2:ip} worker id to ip
 	4. reverse_IPs map[string]int //ip:1, ip:2  ip to worker id
+
+
+worker 1: ip 192.168.56.104
+worker 2: ip 192.168.56.105
+master : ip 192.168.56.106
+
+
+Master side:
+    1. numberofWorker

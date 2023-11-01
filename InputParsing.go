@@ -60,7 +60,7 @@ func Partition(nodes map[string]Node, k int) []map[string]Node {
 		parts[i] = make(map[string]Node)
 	}
 	for id, node := range nodes {
-		partNo := node.ID % k
+		partNo := (node.ID-1) % k
 		parts[partNo][id] = node
 	}
 	return parts

@@ -7,6 +7,17 @@ import (
 	"strconv"
 )
 
+var IPADD = map[int]string{
+    1: "192.168.56.104",
+    2: "192.168.56.105",
+}
+
+var IPADD_R = map[string]int{
+    "192.168.56.104": 1,
+    "192.168.56.105": 2,
+}
+
+var MASTERIP = "192.168.56.106"
 func main() {
 	args := os.Args
 	fmt.Println(args[1])

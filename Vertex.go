@@ -81,7 +81,7 @@ func (v *Vertex) Compute() {
     }
     if updated {
         v.SendMessageToWorker() // Assume some function workerIDFor to get the correct worker ID
-		fmt.Printf("Vertex %d has updated value to neighbors\n", v.id)
+		fmt.Printf("Vertex %d has enqueued all outgoing messages\n", v.id)
 	}
 	v.UpdateState(IDLE)
 	fmt.Printf("Vertex %d: State: %d\n", v.id, v.state)
