@@ -115,7 +115,7 @@ func (w *Worker)ConnectToWorkerssWithLowerID(){
 			fmt.Printf("failed to resolve address: %v\n", err)
 		}
         for retry := 0; retry < maxRetries; retry++ {
-			fmt.Printf("Trying to connect with master %d\n",id)
+			fmt.Printf("Trying to connect with worker %d\n",id)
             conn, err := net.DialTCP("tcp", nil, tcpAddr)
             if err == nil {
 				w.mutex.Lock()
