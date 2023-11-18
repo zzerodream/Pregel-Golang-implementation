@@ -12,6 +12,9 @@ const (
 	ASSIGN_FINISHED
 	EXCHANGE_STOP
 	EXIT
+	HEARTBEAT
+	RESTART
+	RESTART_STATE
 )
 
 /*message
@@ -25,6 +28,7 @@ const (
 	Type 7 PartitionSent → “Master inform worker it has sent all partitions to it”
 	Type 8 ExchangeStopped. -> “Master inform worker to stop exchange message including handle incoming and outgoing messages”
 	Type 9 EXIT --> Algo finished, exit
+	Type 10 HeartBeat --> "Worker sends a message indicating it is alive to master"
 */
 type Message struct {
 	From int

@@ -16,6 +16,10 @@ type WorkerConnection struct {
 	master *Master
 }
 
+func (c *WorkerConnection) CloseConn() {
+	c.conn.Close()
+}
+
 // 2 goroutines per worker connection
 func (c *WorkerConnection) Run() {
 	//receive message from worker
@@ -45,7 +49,12 @@ func (c *WorkerConnection) RecvWorkers() {
 			continue
 		}
 		fmt.Printf("Received messages from worker %d with type %d.\n", message.From, message.Type)
-		c.master.inCh <- message
+		if message.Type == 10 {
+			c.master.workerHeartBeat <- message
+		} else {
+			c.master.inCh <- message
+		}
+		
 	}
 }
 

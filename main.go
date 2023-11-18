@@ -12,8 +12,9 @@ func main() {
 	fmt.Println(args[1])
 	if args[1] == "master"{
 	  // work as master
-	  fmt.Println("Creating new master")
-	  m := NewMaster()
+	  intValue, _ := strconv.Atoi(os.Args[2])
+	  fmt.Printf("Creating new master with ID %d\n", intValue)
+	  m := NewMaster(intValue)
 	  m.Start()
 	}
 	if args[1] == "worker"{

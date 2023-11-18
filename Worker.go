@@ -3,13 +3,14 @@ package main
 import (
     "fmt"
     "net"
-    "strings"
     "sync"
     "bufio"
     "encoding/json"
     "strconv"
 	"time"
 	"os"
+	"math"
+	"io/ioutil"
 )
 
 // Worker represents a worker in the system.
@@ -28,6 +29,37 @@ type Worker struct {
 	MasterPort int
 	sourceVertex int
 	superstep int
+	serverData map[string]interface{}
+	aliveNodes []int
+}
+
+func (w *Worker) GetServerData() {
+	fileContent, err := ioutil.ReadFile("ServerAddress.json")
+	if err != nil {
+		fmt.Println("Error reading file:", err)
+		return
+	}
+
+	// Unmarshal the JSON data into the map
+	err = json.Unmarshal(fileContent, &w.serverData)
+	if err != nil {
+		fmt.Println("Error unmarshalling JSON:", err)
+		return
+	}
+
+	workerData, _ := w.serverData["Worker"].([]interface{})
+	w.numberOfWorkers = len(workerData)
+	for i:=1; i<=w.numberOfWorkers; i++ {
+		w.aliveNodes = append(w.aliveNodes, i)
+	}
+	
+	for _, worker := range workerData {
+		server, _ := worker.(map[string]interface{})
+		addr := server["ip"].(string) + server["internalPort"].(string)
+		workerId := int(server["id"].(float64))
+		w.IPs[workerId] = addr
+		w.reverse_IPs[addr] = workerId
+	}
 }
 
 
@@ -36,12 +68,20 @@ func (w *Worker) EstablishMasterConnection(){
 	maxRetries := 3 // Number of retries
     retryDelay := 5*time.Second // Delay between retries
 	addr := fmt.Sprintf("%s:%d", w.MasterIP, w.MasterPort)
-	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
+	remoteTCPAddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
 		fmt.Printf("failed to resolve address: %v\n", err)
 	}
+	localTCPAddr, err := net.ResolveTCPAddr("tcp", w.GetMyExternalAddr())
+	if err != nil {
+		fmt.Println("Error resolving local address:", err)
+		return
+	}
+	fmt.Printf("localAddr: %s\n", localTCPAddr.String())
 	for retry := 0; retry < maxRetries; retry++ {
-		conn, err := net.DialTCP("tcp", nil, tcpAddr)
+		d := net.Dialer{LocalAddr: localTCPAddr}
+		conn, err := d.Dial("tcp", remoteTCPAddr.String())
+		// conn, err := net.DialTCP("tcp", localAddr, tcpAddr)
 		if err == nil {
 			w.MasterConnection = conn
 			fmt.Printf("Successfully established connection with the master\n")
@@ -53,15 +93,38 @@ func (w *Worker) EstablishMasterConnection(){
 	}
 	fmt.Printf("exhausted all retries, could not establish connection\n")
 }
+
+// func (w *Worker) GetMyInternalPort() string {
+// 	portNum := ":3030"
+// 	workerData, _ := w.serverData["Worker"].([]interface{})
+// 	for _, worker := range workerData {
+// 		server, _ := worker.(map[string]interface{})
+// 		if int(server["id"].(float64)) == w.ID {
+// 			portNum = server["internalPort"].(string)
+// 		}
+// 	}
+// 	return portNum
+// }
+
+func (w *Worker) GetMyExternalAddr() string {
+	addr := "127.0.0.1:3030"
+	workerData, _ := w.serverData["Worker"].([]interface{})
+	for _, worker := range workerData {
+		server, _ := worker.(map[string]interface{})
+		if int(server["id"].(float64)) == w.ID {
+			addr = server["ip"].(string)+server["externalPort"].(string)
+		}
+	}
+	return addr
+}
 //establish connections with other workers
 //Worker needs to listen on IP:9999
-const basePort = 9999
 func (w *Worker) StartListener() {
 	//if this is the worker with highest ID, won't start listening
 	if w.ID == w.numberOfWorkers{
 		return
 	}
-	listenAddr := fmt.Sprintf(":%d", basePort)
+	listenAddr := w.IPs[w.ID]
 	listener, err := net.Listen("tcp", listenAddr)
 	if err != nil {
 	    fmt.Printf("Worker %d Error creating listener: %v\n", w.ID, err)
@@ -69,7 +132,7 @@ func (w *Worker) StartListener() {
 	}
 	defer listener.Close()
 	count := 0
-	fmt.Printf("Worker %d listening on port %d\n", w.ID, basePort)
+	fmt.Printf("Worker %d listening on port %s\n", w.ID, listenAddr)
 	for {
 		conn, err := listener.Accept()
 		count += 1
@@ -79,9 +142,9 @@ func (w *Worker) StartListener() {
 		}
 		// maintain a map so that we can find the conn according to workerID
 		remoteAddress := conn.RemoteAddr().String()
-		ipAndPort := strings.Split(remoteAddress, ":")
-		ip := ipAndPort[0]
-		workerID := w.reverse_IPs[ip]
+		// ipAndPort := strings.Split(remoteAddress, ":")
+		// ip := ipAndPort[0]
+		workerID := w.reverse_IPs[remoteAddress]
 		w.mutex.Lock()
 		w.Connections[workerID] = conn
 		w.mutex.Unlock()
@@ -103,36 +166,41 @@ func (w *Worker)ConnectToWorkerssWithLowerID(){
 	if w.ID == 1{
 		return
 	}
-	maxRetries := 3 // Number of retries
+	maxRetries := 5 // Number of retries
     retryDelay := 2*time.Second // Delay between retries
 	time.Sleep(2*time.Second) //wait a few seconds before trying to establish connection, ensure that all workers have start listening
     count := 0
 	for id := 1; id < w.ID; id++ {
-        targetIP := w.IPs[id]
-        addr := fmt.Sprintf("%s:%d", targetIP, basePort)
-		tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
+        addr := w.IPs[id]
+		remoteTCPAddr, err := net.ResolveTCPAddr("tcp", addr)
 		if err != nil {
 			fmt.Printf("failed to resolve address: %v\n", err)
 		}
+		localTCPAddr, err := net.ResolveTCPAddr("tcp", w.IPs[w.ID])
+		if err != nil {
+			fmt.Println("Error resolving local address:", err)
+			return
+		}
         for retry := 0; retry < maxRetries; retry++ {
-            conn, err := net.DialTCP("tcp", nil, tcpAddr)
+			d := net.Dialer{LocalAddr: localTCPAddr}
+			conn, err := d.Dial("tcp", remoteTCPAddr.String())
             if err == nil {
 				w.mutex.Lock()
 				count += 1
 				w.Connections[id] = conn
 				w.mutex.Unlock()
+				fmt.Printf("Successfully established connection with workers with lower ID\n")
 				if count == w.ID-1{
 					return
 				}else{
 					continue
 				}
             }
-            fmt.Printf("Failed to establish connection to %d, retrying...\n", id)
+            fmt.Printf("Failed to establish connection to %d, retrying...\n%v\n", id, err)
             time.Sleep(retryDelay)
         }
 		fmt.Printf("exhausted all retries, could not establish connection to %d\n",id)
     }
-	fmt.Printf("Successfully established connection with workers with lower ID\n")
 }
 
 //receive graph partition from master and will terminate once receive terminate message
@@ -173,7 +241,7 @@ func (w *Worker) ReceiveGraphPartition() {
 				fmt.Printf("Source vertex is on this worker, enqueue the initial kickoff message\n")
 				msg := Message{
 					From:  0,
-					To:    w.ID,
+					To:    VertexID,
 					Value: 0.0,
 					Type:  5,
 				}
@@ -216,10 +284,23 @@ func extractIDAndEdges(message Message) (int, map[int]int, error) {
 	return ID, convertedEdges, nil
 }
 
+func (w *Worker) GetVerticesValues() map[int]float64 {
+	valueMap := make(map[int]float64)
+	for _, vertex := range(w.Vertices){
+		if math.IsInf(vertex.Value, 1) {
+			valueMap[vertex.id] = math.MaxFloat64
+		} else {
+			valueMap[vertex.id] = vertex.Value
+		}
+	}
+	return valueMap
+}
+
 //receive other messages from master like startsuperstep, startexchange
 func (w *Worker) ReceiveFromMaster(){
 	reader := bufio.NewReader(w.MasterConnection)
 	var terminateChan chan struct{}
+	go w.SendHeartBeat()
 	for {
 		//assume that every message from master is sepetated by '\n'
 	    line, err := reader.ReadString('\n')
@@ -241,8 +322,9 @@ func (w *Worker) ReceiveFromMaster(){
 			//cal ProceedSuperstep()
 			w.superstep +=1
 			w.ProceedSuperstep()
+			allVerticesValue := w.GetVerticesValues()
 			// After proceedsuperstep, inform the Master, mater ID field, computeFinished, type 1
-			FinishedSuperstepMessage := NewMessage(w.ID, -999, nil, 1)
+			FinishedSuperstepMessage := NewMessage(w.ID, -999, allVerticesValue, 1)
 			go w.SendMessageToMaster(*FinishedSuperstepMessage)  //use fo routine or not?
 		case 4:// StartExchange message from Master
 			// just in case the channel is not closed, but unlikely to happen
@@ -272,6 +354,44 @@ func (w *Worker) ReceiveFromMaster(){
 			}
 			fmt.Println("Exiting...")
 			os.Exit(0)
+		
+		case 11:
+			fmt.Println("Receive restart signal")
+			w.Vertices = make(map[int]*Vertex)
+			w.MessageQueue = []Message{}
+			failed := message.Value.([]interface{})
+			w.numberOfWorkers = w.numberOfWorkers-len(failed)
+			fmt.Printf("failed: %v, now number of workers: %d\n", failed, w.numberOfWorkers)
+			for _, nodes := range failed {
+				nodeID := int(nodes.(float64))
+				// w.Connections[nodeID].Close()
+				delete(w.Connections, nodeID)
+			}
+			w.aliveNodes = []int{}
+			signal := true
+			allWorker := len(w.serverData["Worker"].([]interface{}))
+			for i:=1; i<=allWorker; i++ {
+				for _, n := range failed {
+					if i == n {
+						signal = false
+						break
+					}
+				}
+				if signal {
+					w.aliveNodes = append(w.aliveNodes, i)
+				} else {
+					signal = true
+				}
+			}
+			w.ReceiveGraphPartition()
+
+		case 12:
+			fmt.Println("Receive restart state")
+			states := message.Value.(map[string]interface{})
+			for k, v := range states{
+				key, _ := strconv.Atoi(k)
+				w.Vertices[key].Value = v.(float64)
+			}
 		}
 	}
 }
@@ -294,6 +414,7 @@ func (w *Worker) SendMessageToMaster(message Message) {
 func (w *Worker) SendMessageToWorker(workerID int, message Message) {
 	// get the conn through workerID
 	conn := w.Connections[workerID]
+	fmt.Printf("conn: %d, %v\n", workerID, conn)
     data, err := json.Marshal(message)
 	if err != nil {
         fmt.Printf("failed to marshal the message: %v\n", err)
@@ -420,8 +541,10 @@ func (w *Worker) HandleAllOutgoingMessages() {
 			go func(m *Message) {
 				//todo: send messages to corresponding worker
 				To := m.To
-				workerID := To%w.numberOfWorkers
-				if workerID == 0{
+				fmt.Printf("now have %d nodes\n", w.numberOfWorkers)
+				workerID := w.aliveNodes[w.numberOfWorkers-To%w.numberOfWorkers-1]
+				fmt.Printf("Exchange: %d, %v\n", workerID, m)
+				if workerID == w.ID {
 					fmt.Println("Same machine, won't use tcp for exchanging messages.")
 					w.EnqueueMessage(*m)
 				}else{
@@ -448,6 +571,14 @@ func (w *Worker) HandleAllOutgoingMessages() {
 	}
 }
 
+func (w *Worker) SendHeartBeat() {
+	HeartBeatMessage := NewMessage(w.ID, -999, nil, 10)
+	for {
+		go w.SendMessageToMaster(*HeartBeatMessage)
+			time.Sleep(4 * time.Second)
+	}
+}
+
 //
 func NewWorker(ID int) *Worker{
 	return &Worker{
@@ -461,13 +592,16 @@ func NewWorker(ID int) *Worker{
 		mutex:          sync.Mutex{},
 		numberOfWorkers:  1, // set number of workers,
 		MasterIP: "localhost", //set the IP of the msater
-		MasterPort: 8080, //set port number
+		MasterPort: 3000, //set port number
 		sourceVertex: 1,
 		superstep: 0,
+		serverData: make(map[string]interface{}),
+		aliveNodes: []int{},
 	}
 }
 // call all necessary functions for the worker
 func (w *Worker) Run(){
+	w.GetServerData()
 	var wg sync.WaitGroup
 	//Establish connection with master
 	w.EstablishMasterConnection()  //not using go routine cause I want to make sure the connection is establish before proceeding to next step
@@ -493,6 +627,5 @@ func (w *Worker) Run(){
 	fmt.Println("Start listening instructions from Master")
 	//continue receiving instructions from master.
 	w.ReceiveFromMaster()
-
 }
 

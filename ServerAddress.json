@@ -1,0 +1,30 @@
+{
+    "Master": [
+        {
+            "id": 1,
+            "ip": "127.0.0.1",
+            "externalPort": ":3000",
+            "internalPort": ":4000"
+        },
+        {
+            "id": 2,
+            "ip": "127.0.0.1",
+            "externalPort": ":3001",
+            "internalPort": ":4001"
+        }
+    ],
+    "Worker": [
+        {
+            "id": 1,
+            "ip": "127.0.0.1",
+            "externalPort": ":62161",
+            "internalPort": ":52161"
+        },
+        {
+            "id": 2,
+            "ip": "127.0.0.1",
+            "externalPort": ":62162",
+            "internalPort": ":52162"
+        }
+    ]
+}
