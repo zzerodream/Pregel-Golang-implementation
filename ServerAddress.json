@@ -3,28 +3,98 @@
         {
             "id": 1,
             "ip": "127.0.0.1",
-            "externalPort": ":3000",
-            "internalPort": ":4000"
+            "internalPort": ":3000",
+            "externalPort": ":4000",
+            "internalComing": {
+                "2": ":5001",
+                "3": ":62167"
+            },
+            "internalBackup": {
+                "2": ":7001",
+                "3": ":7002"
+            },
+            "externalBackup": {
+                "1": ":7003",
+                "2": ":7004"
+            }
         },
         {
             "id": 2,
             "ip": "127.0.0.1",
-            "externalPort": ":3001",
-            "internalPort": ":4001"
+            "internalPort": ":3001",
+            "externalPort": ":4001",
+            "internalInit": {
+                "1": ":5001"
+            },
+            "internalComing": {
+                "3": ":3004"
+            },
+            "internalBackup": {
+                "1": ":7005",
+                "3": ":7006"
+            },
+            "externalBackup": {
+                "1": ":7007",
+                "2": ":7008"
+            }
+        },
+        {
+            "id": 3,
+            "ip": "127.0.0.1",
+            "internalPort": ":3002",
+            "externalPort": ":4002",
+            "internalInit": {
+                "1": ":62167",
+                "2": ":3004"
+            },
+            "internalBackup": {
+                "1": ":7009",
+                "2": ":7010"
+            },
+            "externalBackup": {
+                "1": ":7011",
+                "2": ":7012"
+            }
         }
     ],
     "Worker": [
         {
             "id": 1,
             "ip": "127.0.0.1",
-            "externalPort": ":62161",
-            "internalPort": ":52161"
+            "internalPort": ":52161",
+            "externalPort": {
+                "1": ":62161",
+                "2": ":62162",
+                "3": ":62163"
+            },
+            "internalBackup": {
+                "2": ":6001"
+            },
+            "externalBackup": {
+                "1": ":6002",
+                "2": ":6003",
+                "3": ":6004"
+            },
+            "listenExtern": ":8001"
         },
         {
             "id": 2,
             "ip": "127.0.0.1",
-            "externalPort": ":62162",
-            "internalPort": ":52162"
+            "internalPort": ":52162",
+            "externalPort": {
+                "1": ":62164",
+                "2": ":62165",
+                "3": ":62166"
+            },
+            "internalBackup": {
+                "1": ":6005"
+            },
+            "externalBackup": {
+                "1": ":6006",
+                "2": ":6007",
+                "3": ":6008"
+            },
+            "listenExtern": ":8002"
         }
     ]
 }
