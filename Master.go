@@ -13,6 +13,8 @@ import (
 	"os"
 )
 
+var start time.Time = time.Now()
+
 type Master struct {
 	id int
 	isPrimary int
@@ -251,7 +253,7 @@ func (m *Master) handleIncomingMessagesFromConn(k int) {
 			fmt.Printf("Error unmarshalling message: %v\n", err)
 			continue
 		}
-		fmt.Printf("Received messages from worker %d with type %d.\n", message.From, message.Type)
+		fmt.Printf("Received messages from master %d with type %d.\n", message.From, message.Type)
 		if message.Type == 13 {
 			m.UpdateMasterState(message)
 		} else if message.Type == 14 {
@@ -274,6 +276,9 @@ func (m *Master) handleIncomingMessagesFromConn(k int) {
 				m.electionResChan <- message
 				fmt.Printf("Receive election rejection from %d\n", message.From)
 			}()
+		} else if message.Type == EXIT {
+			m.LogExit()
+			os.Exit(0)
 		}
     }
 }
@@ -752,7 +757,7 @@ func (m *Master) HandleConnection(conn net.Conn) {
 }
 
 func (m *Master) GraphDistribution() {
-	nodes := ParseInput("SampleInput.json")
+	nodes := ParseInput("Test/SampleNodes50.json")
 	parts := Partition(nodes, m.numberOfWorker)
 	fmt.Println(parts)
 	fmt.Println(m.workersMap)
@@ -914,6 +919,15 @@ func (m *Master) InstructExit(){
 		Type:  EXIT,
 	  }
 	}
+	for i, _ := range m.MasterConnection {
+		msg := Message{
+			From:  m.id,
+			To:    i,
+			Value: nil,
+			Type:  EXIT,
+		}
+		m.SendMessageToMaster(i, msg)
+	}
 	m.mapLock.Unlock()
 }
 
@@ -988,6 +1002,7 @@ func (m *Master) Log() bool{
 }
 
 func (m *Master) ProcessMessage(message Message) {
+	sig := false
 	fmt.Printf("%v\n", message)
 	switch message.Type {
 	case COMPUTE_FINISH:
@@ -1024,8 +1039,11 @@ func (m *Master) ProcessMessage(message Message) {
 		if m.emptyCount == m.numberOfWorker {
 			m.InstructExit()
 			fmt.Println("No more exchanging messages and all vertices are IDLE, send EXIT message to all workers")
-			time.Sleep(5*time.Second)
-			return
+			fmt.Printf("Final result: %v\n", m.verticesValue)
+			m.LogExit()
+			passed := time.Since(start).Seconds()
+			fmt.Printf("Performace: Time used - %v\n", passed)
+			sig = true
 		}
 		if m.emptyCount + m.finishCount == m.numberOfWorker {
 			time.Sleep(5*time.Second)
@@ -1035,5 +1053,8 @@ func (m *Master) ProcessMessage(message Message) {
 			time.Sleep(1*time.Second)
 			m.InstructNextStep()
 		}
+	}
+	if sig {
+		os.Exit(0)
 	}
 }

@@ -343,15 +343,30 @@ func (w *Worker) StartListener() {
 		remoteAddress := conn.RemoteAddr().String()
 		// ipAndPort := strings.Split(remoteAddress, ":")
 		// ip := ipAndPort[0]
-		workerID := w.reverse_IPs[remoteAddress]
+		workerID := w.GetIncomingInternID(remoteAddress)
 		w.mutex.Lock()
 		w.Connections[workerID] = conn
 		w.mutex.Unlock()
 		if count == w.numberOfWorkers-w.ID{ //If all workers with higher ID has established connection with current worker, return.
-			
 			return
 		}
 	}
+}
+
+func (w *Worker) GetIncomingInternID(remote string) int {
+	id := 0
+	workerData, _ := w.serverData["Worker"].([]interface{})
+	for _, worker := range workerData {
+		server, _ := worker.(map[string]interface{})
+		if int(server["id"].(float64)) != w.ID {
+			addrList := server["internalPortOutgoing"].(map[string]interface{})
+			addr := server["ip"].(string) + addrList[strconv.Itoa(w.ID)].(string)
+			if addr == remote {
+				id = int(server["id"].(float64))
+			}
+		}
+	}
+	return id
 }
 /*workers have higher ID will establish connection with workers with lower ID
 let's say worker 1,2,3. 
@@ -360,6 +375,20 @@ let's say worker 1,2,3.
 	c. 3 will start listening on port 9999 and try to establish connection with worker 1, 2
 
 */
+
+func (w *Worker)GetMyInternalOutgoingPort(id int) string{
+	addr := "127.0.0.1:3030"
+	workerData, _ := w.serverData["Worker"].([]interface{})
+	for _, worker := range workerData {
+		server, _ := worker.(map[string]interface{})
+		if int(server["id"].(float64)) == w.ID {
+			addrList := server["internalPortOutgoing"].(map[string]interface{})
+			addr = server["ip"].(string) + addrList[strconv.Itoa(id)].(string)
+		}
+	}
+	return addr
+}
+
 func (w *Worker)ConnectToWorkerssWithLowerID(){
 	//if this is the worker with lowest ID 1, just return.c
 	if w.ID == 1{
@@ -375,7 +404,7 @@ func (w *Worker)ConnectToWorkerssWithLowerID(){
 		if err != nil {
 			fmt.Printf("failed to resolve address: %v\n", err)
 		}
-		localTCPAddr, err := net.ResolveTCPAddr("tcp", w.IPs[w.ID])
+		localTCPAddr, err := net.ResolveTCPAddr("tcp", w.GetMyInternalOutgoingPort(id))
 		if err != nil {
 			fmt.Println("Error resolving local address:", err)
 			return
@@ -392,13 +421,12 @@ func (w *Worker)ConnectToWorkerssWithLowerID(){
 				if count == w.ID-1{
 					return
 				}else{
-					continue
+					break
 				}
             }
             fmt.Printf("Failed to establish connection to %d, retrying...\n%v\n", id, err)
             time.Sleep(retryDelay)
         }
-		fmt.Printf("exhausted all retries, could not establish connection to %d\n",id)
     }
 }
 
@@ -627,7 +655,7 @@ func (w *Worker) SendMessageToMaster(message Message) {
     }	
     // seperate each data by \n
     data = append(data, '\n')
-	fmt.Printf("Node %d has sent the message %v to %d\n", message.From, message, w.currentMaster)
+	fmt.Printf("Worker %d has sent the message %v to master %d\n", message.From, message, w.currentMaster)
     
 	_, err = w.MasterConnection[w.currentMaster].Write(data)
 	if err != nil {

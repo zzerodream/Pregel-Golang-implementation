@@ -63,5 +63,6 @@ func Partition(nodes map[string]Node, k int) []map[string]Node {
 		partNo := node.ID % k
 		parts[partNo][id] = node
 	}
+	fmt.Printf("********%v\n", parts)
 	return parts
 }
