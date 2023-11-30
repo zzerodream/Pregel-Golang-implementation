@@ -2,10 +2,3 @@ Start
 Exit
 Start
 Exit
-Start
-Exit
-Start
-Exit
-Start
-Exit
-Start

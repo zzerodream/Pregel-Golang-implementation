@@ -162,8 +162,7 @@ func (w *Worker) ConnectToWorkers(){
 		if k == w.ID {
 			continue
 		}
-		maxRetries := 3 // Number of retries
-		retryDelay := 5*time.Second // Delay between retries
+		maxRetries := 1 // Number of retries
 		remoteTCPAddr, err := net.ResolveTCPAddr("tcp", v)
 		if err != nil {
 			fmt.Printf("failed to resolve address: %v\n", err)
@@ -185,7 +184,6 @@ func (w *Worker) ConnectToWorkers(){
 			}
 
 			fmt.Printf("Failed to establish connection to %s - %v, retrying...\n", v, err)
-			time.Sleep(retryDelay)
 		}
 	}
 }
@@ -394,7 +392,7 @@ func (w *Worker)ConnectToWorkerssWithLowerID(){
 	if w.ID == 1{
 		return
 	}
-	maxRetries := 5 // Number of retries
+	maxRetries := 3 // Number of retries
     retryDelay := 2*time.Second // Delay between retries
 	time.Sleep(2*time.Second) //wait a few seconds before trying to establish connection, ensure that all workers have start listening
     count := 0
@@ -800,7 +798,9 @@ func (w *Worker) HandleAllOutgoingMessages() {
 				//todo: send messages to corresponding worker
 				To := m.To
 				fmt.Printf("To: %d, now have %d nodes %v\n", To, w.numberOfWorkers, w.aliveNodes)
-				workerID := w.aliveNodes[w.numberOfWorkers-To%w.numberOfWorkers-1]
+				
+				// workerID := w.aliveNodes[w.numberOfWorkers-To%w.numberOfWorkers-1]
+				workerID := w.aliveNodes[To%w.numberOfWorkers]
 				fmt.Printf("Exchange: %d, %v\n", workerID, m)
 				if workerID == w.ID {
 					fmt.Println("Same machine, won't use tcp for exchanging messages.")
@@ -857,7 +857,7 @@ func NewWorker(ID int) *Worker{
 		superstep: 0,
 		serverData: make(map[string]interface{}),
 		aliveNodes: []int{},
-		currentMaster: 3,
+		currentMaster: 5,
 		isRecovered: false,
 	}
 }

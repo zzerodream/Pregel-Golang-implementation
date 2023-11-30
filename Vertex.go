@@ -37,7 +37,7 @@ func NewVertex(id int, edges map[int]int, workerChan chan *Message) *Vertex {
 		//distance: make(map[int]int),
 		//state: ACTIVE,
 		Value: math.Inf(1),
-		state: IDLE,
+		state: ACTIVE,
 		edges: edges,
 		workerChan: workerChan,
 	}
@@ -82,8 +82,7 @@ func (v *Vertex) Compute() {
     if updated {
         v.SendMessageToWorker() // Assume some function workerIDFor to get the correct worker ID
 		fmt.Printf("Vertex %d has updated value to neighbors\n", v.id)
-	}
-	v.UpdateState(IDLE)
+	} 
 	fmt.Printf("Vertex %d: State: %d\n", v.id, v.state)
 	return
 }

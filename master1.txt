@@ -1,5 +1,2 @@
 Start
 Exit
-Start
-Exit
-Start

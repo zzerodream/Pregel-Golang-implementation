@@ -69,7 +69,7 @@ func (m *Master) RegisterWorker(conn net.Conn) *WorkerConnection {
 func NewMaster(id int) *Master {	
 	return &Master{
 		id: id,
-		isPrimary: 3,
+		isPrimary: 5,
 		mapLock:        sync.Mutex{},
 		workersMap:     make(map[int]*WorkerConnection),
 		inCh:           make(chan Message, 500),
@@ -236,11 +236,12 @@ func (m *Master) SendMessageToMaster(masterID int, message Message) {
 
 func (m *Master) handleIncomingMessagesFromConn(k int) {
 	fmt.Printf("Begin to listen the sync messages from %d.\n", k)
-	reader := bufio.NewReader(m.MasterConnection[k])
     for {
 		// if (m.isPrimary == m.id){
 		// 	continue
 		// }
+		fmt.Printf("my master connections: %v.\n", m.MasterConnection)
+		reader := bufio.NewReader(m.MasterConnection[k])
 		line, err := reader.ReadString('\n')
 		if err != nil {
 			fmt.Printf("Error reading message: %v\n", err)
@@ -277,6 +278,8 @@ func (m *Master) handleIncomingMessagesFromConn(k int) {
 				fmt.Printf("Receive election rejection from %d\n", message.From)
 			}()
 		} else if message.Type == EXIT {
+			passed := time.Since(start).Seconds()
+			fmt.Printf("Performace: Time used - %v\n", passed)
 			m.LogExit()
 			os.Exit(0)
 		}
@@ -503,10 +506,12 @@ func (m *Master) StartMasterListener() {
 		// ipAndPort := strings.Split(remoteAddress, ":")
 		// ip := ipAndPort[0]
 		masterID := m.GetIncomingConnAddress(remoteAddress)
+		fmt.Printf("507: masterID - %d\n", masterID)
 		m.mapLock.Lock()
 		m.MasterConnection[masterID] = conn
 		m.mapLock.Unlock()
 		if count == len(m.IPs)-m.id{ //If all workers with higher ID has established connection with current worker, return.
+			fmt.Printf("...........................%v, %d", m.IPs, m.id)
 			return
 		}
 	}
@@ -540,10 +545,12 @@ func (m *Master) StartWorkerListener() {
 
 func (m *Master) SendHeartBeat() {
 	HeartBeatMessage := NewMessage(m.id, -999, nil, 14)
+	fmt.Printf("IPS: %v\n", m.IPs)
 	for {
 		if (m.isPrimary == m.id) {
 			for k, _ := range m.IPs{
-				if k != m.id {
+				if k != m.isPrimary {
+					fmt.Printf("Preparing send hb to %d\n", k)
 					go m.SendMessageToMaster(k, *HeartBeatMessage)
 				}
 			}
@@ -628,7 +635,6 @@ func (m *Master) ConnectToWorkersAfterRecovery(){
 		workerPorts[int(server["id"].(float64))] = "127.0.0.1" + server["listenExtern"].(string)
 	}
 
-	time.Sleep(2*time.Second) //wait a few seconds before trying to establish connection, ensure that all workers have start listening
     count := 0
 	fmt.Printf("worker ports: %v\n", workerPorts)
 	for k, v := range(workerPorts) {
@@ -659,7 +665,7 @@ func (m *Master) ConnectToWorkersAfterRecovery(){
 			m.aliveWorkers = append(m.aliveWorkers, k)
 			m.mapLock.Unlock()
 			go wc.Run()
-			fmt.Printf("Successfully established connection with masters, %s -> %s\n", localAddr, addr)
+			fmt.Printf("Successfully established connection with worker %d, %s -> %s\n", k, localAddr, addr)
 		} else {
             fmt.Printf("Failed to establish connection to %d due to %v\n", k, err)
 		}   
@@ -712,6 +718,7 @@ func (m *Master) Start() {
 	go m.SendHeartBeat()
 	for k, _ := range m.IPs {
 		if k != m.id {
+			fmt.Printf("716: %d\n", k)
 			go m.handleIncomingMessagesFromConn(k)
 		}
 	}
@@ -757,18 +764,17 @@ func (m *Master) HandleConnection(conn net.Conn) {
 }
 
 func (m *Master) GraphDistribution() {
+	sort.Ints(m.aliveWorkers)
 	nodes := ParseInput("Test/SampleNodes50.json")
 	parts := Partition(nodes, m.numberOfWorker)
 	fmt.Println(parts)
-	fmt.Println(m.workersMap)
 	m.mapLock.Lock()
 	//TODO: disttibute the graph. Now only work for one worker, we need to know all workers.
 	for id, part := range parts {
-		fmt.Println(part)
-		receiver := m.aliveWorkers[m.numberOfWorker-id-1]
+		receiver := m.aliveWorkers[id]
+		fmt.Printf("Send %v to receiver %d: %d\n", part, id, receiver)
 		for _, node := range part {
 			m.workersMap[receiver].C <- node
-			fmt.Printf("Send the vertice to %d - %v\n", receiver, node)
 		}
 	}
 	m.mapLock.Unlock()
@@ -778,7 +784,7 @@ func (m *Master) UpdateState() {
 	states := make(map[int](map[int]float64), m.numberOfWorker)
 	fmt.Printf("Updating states - vertices values: %v, number of workers: %d, aliveWorkers: %v\n", m.verticesValue, m.numberOfWorker, m.aliveWorkers)
 	for k, v := range m.verticesValue {
-		server_id := m.aliveWorkers[m.numberOfWorker-k%m.numberOfWorker-1]
+		server_id := m.aliveWorkers[k%m.numberOfWorker]
 		if _, ok := states[server_id]; !ok {
 			states[server_id] = make(map[int]float64)
 		}
@@ -786,7 +792,6 @@ func (m *Master) UpdateState() {
 	}
 	fmt.Printf("states: %v\n", states)
 	for k, v := range states {
-		fmt.Printf("workerMap: %v, k: %d\n", m.workersMap, k)
 		m.workersMap[k].C <- Message {
 			From:  0,
 			To:    k,
@@ -932,7 +937,6 @@ func (m *Master) InstructExit(){
 }
 
 func (m *Master) InstructExchangeStop(){
-	fmt.Printf("Current vertices values: %v\n", m.verticesValue)
 	m.mapLock.Lock()
 	for i, connection := range m.workersMap {
 	  connection.C <- Message{
@@ -1021,10 +1025,8 @@ func (m *Master) ProcessMessage(message Message) {
 			m.InstructExchangeStop()
 			m.finishCount = 0
 			time.Sleep(2*time.Second)
-			m.InstructNextStep()
-			
-		}
-		if m.emptyCount + m.finishCount == m.numberOfWorker {
+			m.InstructNextStep()	
+		} else if m.emptyCount + m.finishCount == m.numberOfWorker {
 			time.Sleep(5*time.Second)
 			m.InstructExchangeStop()
 			m.finishCount = 0
@@ -1044,8 +1046,8 @@ func (m *Master) ProcessMessage(message Message) {
 			passed := time.Since(start).Seconds()
 			fmt.Printf("Performace: Time used - %v\n", passed)
 			sig = true
-		}
-		if m.emptyCount + m.finishCount == m.numberOfWorker {
+			time.Sleep(2*time.Second)
+		} else if m.emptyCount + m.finishCount == m.numberOfWorker {
 			time.Sleep(5*time.Second)
 			m.InstructExchangeStop()
 			m.finishCount = 0
