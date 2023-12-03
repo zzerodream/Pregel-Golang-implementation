@@ -1,1 +1,4 @@
 **.exe
+file*
+worker*.txt
+master*.txt
