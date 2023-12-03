@@ -1,1 +1,6 @@
 **.exe
+file*
+worker*.txt
+master*.txt
+.idea
+/venv/

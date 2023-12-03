@@ -244,6 +244,9 @@ func (m *Master) handleIncomingMessagesFromConn(k int) {
 		// 	continue
 		// }
 		fmt.Printf("my master connections: %v.\n", m.MasterConnection)
+		if m.MasterConnection[k] == nil {
+			continue
+		}
 		reader := bufio.NewReader(m.MasterConnection[k])
 		line, err := reader.ReadString('\n')
 		if err != nil {
