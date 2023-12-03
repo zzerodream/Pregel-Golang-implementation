@@ -665,6 +665,9 @@ func (w *Worker) SendMessageToMaster(message Message) {
 func (w *Worker) SendMessageToWorker(workerID int, message Message) {
 	// get the conn through workerID
 	conn := w.Connections[workerID]
+	if conn == nil {
+		return
+	}
 	fmt.Printf("connections: %v, conn: %d, %v\n", w.Connections, workerID, conn)
     data, err := json.Marshal(message)
 	if err != nil {
