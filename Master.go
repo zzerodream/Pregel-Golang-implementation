@@ -222,6 +222,9 @@ func (m *Master) LogExit() {
 func (m *Master) SendMessageToMaster(masterID int, message Message) {
 	// get the conn through workerID
 	conn := m.MasterConnection[masterID]
+	if conn == nil {
+		return
+	}
     data, err := json.Marshal(message)
 	if err != nil {
         fmt.Printf("failed to marshal the message: %v\n", err)
